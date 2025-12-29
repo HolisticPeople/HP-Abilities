@@ -103,7 +103,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'explainSystem'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         wp_register_ability('hp-funnels/schema', [
@@ -123,7 +123,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'getSchema'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         wp_register_ability('hp-funnels/styling-schema', [
@@ -143,7 +143,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'getStylingSchema'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         // Funnel CRUD abilities
@@ -165,7 +165,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'listFunnels'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         wp_register_ability('hp-funnels/get', [
@@ -191,7 +191,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'getFunnel'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         wp_register_ability('hp-funnels/create', [
@@ -222,7 +222,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'createFunnel'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         wp_register_ability('hp-funnels/update', [
@@ -253,7 +253,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'updateFunnel'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         wp_register_ability('hp-funnels/update-sections', [
@@ -283,7 +283,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'updateSections'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         // Version control abilities
@@ -310,7 +310,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'listVersions'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         wp_register_ability('hp-funnels/versions-create', [
@@ -340,7 +340,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'createVersion'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         wp_register_ability('hp-funnels/versions-restore', [
@@ -370,7 +370,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'restoreVersion'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         // Product abilities
@@ -405,7 +405,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'searchProducts'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         wp_register_ability('hp-products/get', [
@@ -431,7 +431,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'getProduct'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         wp_register_ability('hp-products/calculate-supply', [
@@ -468,7 +468,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'calculateSupply'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         // Protocol builder ability
@@ -509,7 +509,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'buildKit'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         // Economics abilities
@@ -553,7 +553,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'calculateEconomics'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         wp_register_ability('hp-economics/validate', [
@@ -589,7 +589,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'validateOffer'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         wp_register_ability('hp-economics/guidelines', [
@@ -619,7 +619,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'economicGuidelines'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => false]],
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => false], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
     }
 
@@ -669,6 +669,7 @@ class Plugin
                 'annotations'  => [
                     'readonly' => true,
                 ],
+                'mcp' => ['public' => true, 'type' => 'tool'],
             ],
         ]);
     }
@@ -745,6 +746,7 @@ class Plugin
                 'annotations'  => [
                     'readonly' => true,
                 ],
+                'mcp' => ['public' => true, 'type' => 'tool'],
             ],
         ]);
     }
@@ -801,6 +803,7 @@ class Plugin
                 'annotations'  => [
                     'readonly' => true,
                 ],
+                'mcp' => ['public' => true, 'type' => 'tool'],
             ],
         ]);
     }
@@ -854,6 +857,7 @@ class Plugin
                 'annotations'  => [
                     'destructive' => true,
                 ],
+                'mcp' => ['public' => true, 'type' => 'tool'],
             ],
         ]);
     }
