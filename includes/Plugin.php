@@ -56,12 +56,12 @@ class Plugin
      */
     private static function register_funnel_abilities(): void
     {
-        if (!function_exists('register_ability')) {
+        if (!function_exists('wp_register_ability')) {
             return;
         }
 
         // System & Schema abilities
-        register_ability('hp/funnels/explain-system', [
+        wp_register_ability('hp/funnels/explain-system', [
             'label'       => __('Explain Funnel System', 'hp-abilities'),
             'description' => __('Get complete funnel system documentation including sections, offer types, styling, and checkout flow.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -81,7 +81,7 @@ class Plugin
             'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
         ]);
 
-        register_ability('hp/funnels/schema', [
+        wp_register_ability('hp/funnels/schema', [
             'label'       => __('Get Funnel Schema', 'hp-abilities'),
             'description' => __('Get JSON schema with AI generation hints for funnel creation.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -101,7 +101,7 @@ class Plugin
             'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
         ]);
 
-        register_ability('hp/funnels/styling-schema', [
+        wp_register_ability('hp/funnels/styling-schema', [
             'label'       => __('Get Styling Schema', 'hp-abilities'),
             'description' => __('Get styling schema with theme presets and color palettes.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -122,7 +122,7 @@ class Plugin
         ]);
 
         // Funnel CRUD abilities
-        register_ability('hp/funnels/list', [
+        wp_register_ability('hp/funnels/list', [
             'label'       => __('List Funnels', 'hp-abilities'),
             'description' => __('List all HP funnels with metadata.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -143,7 +143,7 @@ class Plugin
             'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
         ]);
 
-        register_ability('hp/funnels/get', [
+        wp_register_ability('hp/funnels/get', [
             'label'       => __('Get Funnel', 'hp-abilities'),
             'description' => __('Get complete funnel data by slug.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -169,7 +169,7 @@ class Plugin
             'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
         ]);
 
-        register_ability('hp/funnels/create', [
+        wp_register_ability('hp/funnels/create', [
             'label'       => __('Create Funnel', 'hp-abilities'),
             'description' => __('Create a new funnel from JSON data.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -200,7 +200,7 @@ class Plugin
             'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true]],
         ]);
 
-        register_ability('hp/funnels/update', [
+        wp_register_ability('hp/funnels/update', [
             'label'       => __('Update Funnel', 'hp-abilities'),
             'description' => __('Update an existing funnel.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -231,7 +231,7 @@ class Plugin
             'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true]],
         ]);
 
-        register_ability('hp/funnels/update-sections', [
+        wp_register_ability('hp/funnels/update-sections', [
             'label'       => __('Update Funnel Sections', 'hp-abilities'),
             'description' => __('Update specific sections of a funnel.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -262,7 +262,7 @@ class Plugin
         ]);
 
         // Version control abilities
-        register_ability('hp/funnels/versions/list', [
+        wp_register_ability('hp/funnels/versions/list', [
             'label'       => __('List Funnel Versions', 'hp-abilities'),
             'description' => __('List all saved versions of a funnel.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -288,7 +288,7 @@ class Plugin
             'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
         ]);
 
-        register_ability('hp/funnels/versions/create', [
+        wp_register_ability('hp/funnels/versions/create', [
             'label'       => __('Create Funnel Backup', 'hp-abilities'),
             'description' => __('Create a version backup of a funnel.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -318,7 +318,7 @@ class Plugin
             'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true]],
         ]);
 
-        register_ability('hp/funnels/versions/restore', [
+        wp_register_ability('hp/funnels/versions/restore', [
             'label'       => __('Restore Funnel Version', 'hp-abilities'),
             'description' => __('Restore a funnel to a previous version.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -349,7 +349,7 @@ class Plugin
         ]);
 
         // Product abilities
-        register_ability('hp/products/search', [
+        wp_register_ability('hp/products/search', [
             'label'       => __('Search Products', 'hp-abilities'),
             'description' => __('Search WooCommerce products with filters.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -383,7 +383,7 @@ class Plugin
             'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
         ]);
 
-        register_ability('hp/products/get', [
+        wp_register_ability('hp/products/get', [
             'label'       => __('Get Product Details', 'hp-abilities'),
             'description' => __('Get detailed product information by SKU including serving sizes.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -409,7 +409,7 @@ class Plugin
             'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
         ]);
 
-        register_ability('hp/products/calculate-supply', [
+        wp_register_ability('hp/products/calculate-supply', [
             'label'       => __('Calculate Supply', 'hp-abilities'),
             'description' => __('Calculate how many bottles needed for X days of a protocol.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -447,7 +447,7 @@ class Plugin
         ]);
 
         // Protocol builder ability
-        register_ability('hp/protocols/build-kit', [
+        wp_register_ability('hp/protocols/build-kit', [
             'label'       => __('Build Kit from Protocol', 'hp-abilities'),
             'description' => __('Build a product kit from a health protocol with quantities for X days.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -488,7 +488,7 @@ class Plugin
         ]);
 
         // Economics abilities
-        register_ability('hp/economics/calculate', [
+        wp_register_ability('hp/economics/calculate', [
             'label'       => __('Calculate Profitability', 'hp-abilities'),
             'description' => __('Calculate offer profitability including COGS and shipping.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -531,7 +531,7 @@ class Plugin
             'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
         ]);
 
-        register_ability('hp/economics/validate', [
+        wp_register_ability('hp/economics/validate', [
             'label'       => __('Validate Offer Economics', 'hp-abilities'),
             'description' => __('Validate if an offer meets economic guidelines.', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -567,7 +567,7 @@ class Plugin
             'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true]],
         ]);
 
-        register_ability('hp/economics/guidelines', [
+        wp_register_ability('hp/economics/guidelines', [
             'label'       => __('Economic Guidelines', 'hp-abilities'),
             'description' => __('Get or set economic guidelines (min profit %, min profit $).', 'hp-abilities'),
             'category'    => 'hp-funnels',
@@ -603,11 +603,11 @@ class Plugin
      */
     private static function register_customer_lookup_ability(): void
     {
-        if (!function_exists('register_ability')) {
+        if (!function_exists('wp_register_ability')) {
             return;
         }
 
-        register_ability('hp/customers/lookup', [
+        wp_register_ability('hp/customers/lookup', [
             'label'       => __('Lookup Customer', 'hp-abilities'),
             'description' => __('Get customer profile, order history, points balance, and lifetime value by email.', 'hp-abilities'),
             'category'    => 'hp-admin',
@@ -653,11 +653,11 @@ class Plugin
      */
     private static function register_order_search_ability(): void
     {
-        if (!function_exists('register_ability')) {
+        if (!function_exists('wp_register_ability')) {
             return;
         }
 
-        register_ability('hp/orders/search', [
+        wp_register_ability('hp/orders/search', [
             'label'       => __('Search Orders', 'hp-abilities'),
             'description' => __('Find WooCommerce orders by customer email, status, date range, or product.', 'hp-abilities'),
             'category'    => 'hp-admin',
@@ -729,11 +729,11 @@ class Plugin
      */
     private static function register_inventory_check_ability(): void
     {
-        if (!function_exists('register_ability')) {
+        if (!function_exists('wp_register_ability')) {
             return;
         }
 
-        register_ability('hp/inventory/check', [
+        wp_register_ability('hp/inventory/check', [
             'label'       => __('Check Inventory', 'hp-abilities'),
             'description' => __('Check stock levels for one or more products by SKU.', 'hp-abilities'),
             'category'    => 'hp-admin',
@@ -785,11 +785,11 @@ class Plugin
      */
     private static function register_order_status_ability(): void
     {
-        if (!function_exists('register_ability')) {
+        if (!function_exists('wp_register_ability')) {
             return;
         }
 
-        register_ability('hp/orders/update-status', [
+        wp_register_ability('hp/orders/update-status', [
             'label'       => __('Update Order Status', 'hp-abilities'),
             'description' => __('Change the status of a WooCommerce order.', 'hp-abilities'),
             'category'    => 'hp-admin',
@@ -904,7 +904,7 @@ class Plugin
      */
     public static function render_settings_page(): void
     {
-        $abilities_available = function_exists('register_ability');
+        $abilities_available = function_exists('wp_register_ability');
         ?>
         <div class="wrap">
             <h1><?php echo esc_html__('HP Abilities', 'hp-abilities'); ?></h1>
