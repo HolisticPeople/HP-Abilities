@@ -37,10 +37,7 @@ class Plugin
      */
     public static function include_hp_abilities_in_wc_mcp(bool $include, string $ability_id): bool
     {
-        // Include all HP abilities (hp-funnels/, hp-products/, hp-protocols/, hp-economics/, hp-customers/, hp-orders/, hp-inventory/)
-        if (str_starts_with($ability_id, 'hp-')) {
-            return true;
-        }
+        // Temporarily disable to see if WooCommerce tools return
         return $include;
     }
 
