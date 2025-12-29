@@ -35,6 +35,9 @@ class Plugin
      */
     public static function register_abilities(): void
     {
+        // First, register our ability categories
+        self::register_ability_categories();
+
         // Customer lookup ability
         self::register_customer_lookup_ability();
         
@@ -49,6 +52,28 @@ class Plugin
 
         // Funnel abilities (requires HP-React-Widgets)
         self::register_funnel_abilities();
+    }
+
+    /**
+     * Register custom ability categories.
+     */
+    private static function register_ability_categories(): void
+    {
+        if (!function_exists('wp_register_ability_category')) {
+            return;
+        }
+
+        // HP Admin category for store operations
+        wp_register_ability_category('hp-admin', [
+            'label'       => __('HP Store Admin', 'hp-abilities'),
+            'description' => __('Holistic People store administration abilities', 'hp-abilities'),
+        ]);
+
+        // HP Funnels category for funnel management
+        wp_register_ability_category('hp-funnels', [
+            'label'       => __('HP Funnels', 'hp-abilities'),
+            'description' => __('Holistic People sales funnel abilities', 'hp-abilities'),
+        ]);
     }
 
     /**
