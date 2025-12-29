@@ -37,14 +37,11 @@ class Plugin
      */
     public static function include_hp_abilities_in_wc_mcp(bool $include, string $ability_id): bool
     {
-        // Adding first 5 real tools back
+        // Enabling only 3 tools to test if empty properties was the issue
         $enabled_tools = [
             'hp-test/hello',
             'hp-funnels/explain-system',
             'hp-funnels/schema',
-            'hp-funnels/styling-schema',
-            'hp-funnels/list',
-            'hp-funnels/get',
         ];
 
         if (in_array($ability_id, $enabled_tools)) {
@@ -123,7 +120,7 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -143,7 +140,7 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -163,7 +160,7 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -184,14 +181,17 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
                 'properties' => [
                     'success' => ['type' => 'boolean'],
                     'count' => ['type' => 'integer'],
-                    'funnels' => ['type' => 'array'],
+                    'funnels' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'object'],
+                    ],
                 ],
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'listFunnels'],
@@ -217,7 +217,10 @@ class Plugin
                 'type' => 'object',
                 'properties' => [
                     'success' => ['type' => 'boolean'],
-                    'funnel' => ['type' => 'object'],
+                    'funnel' => [
+                        'type' => 'object',
+                        'properties' => (object) [],
+                    ],
                 ],
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'getFunnel'],
@@ -235,11 +238,12 @@ class Plugin
                     'funnel' => [
                         'type' => 'object',
                         'description' => 'Funnel metadata (slug, name)',
+                        'properties' => (object) [],
                     ],
-                    'header' => ['type' => 'object'],
-                    'hero' => ['type' => 'object'],
-                    'offers' => ['type' => 'object'],
-                    'styling' => ['type' => 'object'],
+                    'header' => ['type' => 'object', 'properties' => (object) []],
+                    'hero' => ['type' => 'object', 'properties' => (object) []],
+                    'offers' => ['type' => 'object', 'properties' => (object) []],
+                    'styling' => ['type' => 'object', 'properties' => (object) []],
                 ],
                 'required' => ['funnel'],
             ],
@@ -267,11 +271,11 @@ class Plugin
                         'type' => 'string',
                         'description' => 'Funnel slug to update',
                     ],
-                    'funnel' => ['type' => 'object'],
-                    'header' => ['type' => 'object'],
-                    'hero' => ['type' => 'object'],
-                    'offers' => ['type' => 'object'],
-                    'styling' => ['type' => 'object'],
+                    'funnel' => ['type' => 'object', 'properties' => (object) []],
+                    'header' => ['type' => 'object', 'properties' => (object) []],
+                    'hero' => ['type' => 'object', 'properties' => (object) []],
+                    'offers' => ['type' => 'object', 'properties' => (object) []],
+                    'styling' => ['type' => 'object', 'properties' => (object) []],
                 ],
                 'required' => ['slug'],
             ],
@@ -301,6 +305,7 @@ class Plugin
                     'sections' => [
                         'type' => 'object',
                         'description' => 'Object with section names as keys and section data as values',
+                        'properties' => (object) [],
                     ],
                 ],
                 'required' => ['slug', 'sections'],
@@ -309,7 +314,10 @@ class Plugin
                 'type' => 'object',
                 'properties' => [
                     'success' => ['type' => 'boolean'],
-                    'updated_sections' => ['type' => 'array'],
+                    'updated_sections' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'string'],
+                    ],
                 ],
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'updateSections'],
@@ -336,7 +344,10 @@ class Plugin
                 'type' => 'object',
                 'properties' => [
                     'success' => ['type' => 'boolean'],
-                    'versions' => ['type' => 'array'],
+                    'versions' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'object', 'properties' => (object) []],
+                    ],
                 ],
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'listVersions'],
@@ -597,6 +608,13 @@ class Plugin
                     'items' => [
                         'type' => 'array',
                         'description' => 'Array of {sku, quantity}',
+                        'items' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'sku' => ['type' => 'string'],
+                                'quantity' => ['type' => 'integer'],
+                            ],
+                        ],
                     ],
                     'price' => [
                         'type' => 'number',
@@ -614,8 +632,14 @@ class Plugin
                 'properties' => [
                     'success' => ['type' => 'boolean'],
                     'valid' => ['type' => 'boolean'],
-                    'issues' => ['type' => 'array'],
-                    'suggestions' => ['type' => 'array'],
+                    'issues' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'string'],
+                    ],
+                    'suggestions' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'string'],
+                    ],
                 ],
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'validateOffer'],
@@ -645,7 +669,10 @@ class Plugin
                 'type' => 'object',
                 'properties' => [
                     'success' => ['type' => 'boolean'],
-                    'guidelines' => ['type' => 'object'],
+                    'guidelines' => [
+                        'type' => 'object',
+                        'properties' => (object) [],
+                    ],
                 ],
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'economicGuidelines'],
