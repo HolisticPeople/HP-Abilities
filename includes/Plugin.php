@@ -37,14 +37,8 @@ class Plugin
      */
     public static function include_hp_abilities_in_wc_mcp(bool $include, string $ability_id): bool
     {
-        // Enabling only 3 tools to test if empty properties was the issue
-        $enabled_tools = [
-            'hp-test/hello',
-            'hp-funnels/explain-system',
-            'hp-funnels/schema',
-        ];
-
-        if (in_array($ability_id, $enabled_tools)) {
+        // Enabling ALL HP tools now that we found the schema issue
+        if (str_starts_with($ability_id, 'hp-')) {
             return true;
         }
         return $include;
@@ -415,7 +409,6 @@ class Plugin
             'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
-        // Product abilities
         wp_register_ability('hp-products/search', [
             'label'       => __('Search Products', 'hp-abilities'),
             'description' => __('Search WooCommerce products with filters.', 'hp-abilities'),
@@ -442,7 +435,10 @@ class Plugin
                 'properties' => [
                     'success' => ['type' => 'boolean'],
                     'count' => ['type' => 'integer'],
-                    'products' => ['type' => 'array'],
+                    'products' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'object', 'properties' => (object) []],
+                    ],
                 ],
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'searchProducts'],
@@ -468,7 +464,10 @@ class Plugin
                 'type' => 'object',
                 'properties' => [
                     'success' => ['type' => 'boolean'],
-                    'product' => ['type' => 'object'],
+                    'product' => [
+                        'type' => 'object',
+                        'properties' => (object) [],
+                    ],
                 ],
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'getProduct'],
@@ -544,9 +543,18 @@ class Plugin
                 'properties' => [
                     'success' => ['type' => 'boolean'],
                     'kit_name' => ['type' => 'string'],
-                    'products' => ['type' => 'array'],
-                    'economics' => ['type' => 'object'],
-                    'offer_options' => ['type' => 'array'],
+                    'products' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'object', 'properties' => (object) []],
+                    ],
+                    'economics' => [
+                        'type' => 'object',
+                        'properties' => (object) [],
+                    ],
+                    'offer_options' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'object', 'properties' => (object) []],
+                    ],
                 ],
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'buildKit'],
@@ -715,7 +723,10 @@ class Plugin
                     'total_spent'     => ['type' => 'number'],
                     'points_balance'  => ['type' => 'integer'],
                     'last_order_date' => ['type' => 'string'],
-                    'billing_address' => ['type' => 'object'],
+                    'billing_address' => [
+                        'type' => 'object',
+                        'properties' => (object) [],
+                    ],
                 ],
             ],
             'execute_callback'    => [Abilities\CustomerLookup::class, 'execute'],
