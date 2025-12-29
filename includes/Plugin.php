@@ -15,8 +15,8 @@ class Plugin
      */
     public static function init(): void
     {
-        // Register abilities
-        add_action('init', [self::class, 'register_abilities']);
+        // Register abilities on the correct hook
+        add_action('wp_abilities_api_init', [self::class, 'register_abilities']);
         
         // Register settings page
         add_action('admin_menu', [self::class, 'register_settings_page']);
