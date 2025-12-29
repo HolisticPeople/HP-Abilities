@@ -15,6 +15,9 @@ class Plugin
      */
     public static function init(): void
     {
+        // Register ability categories first (fires before abilities)
+        add_action('wp_abilities_api_categories_init', [self::class, 'register_ability_categories']);
+        
         // Register abilities on the correct hook
         add_action('wp_abilities_api_init', [self::class, 'register_abilities']);
         
@@ -35,9 +38,6 @@ class Plugin
      */
     public static function register_abilities(): void
     {
-        // First, register our ability categories
-        self::register_ability_categories();
-
         // Customer lookup ability
         self::register_customer_lookup_ability();
         
