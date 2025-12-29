@@ -57,7 +57,7 @@ class Plugin
     /**
      * Register custom ability categories.
      */
-    private static function register_ability_categories(): void
+    public static function register_ability_categories(): void
     {
         if (!function_exists('wp_register_ability_category')) {
             return;
