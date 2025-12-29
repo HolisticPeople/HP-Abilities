@@ -23,6 +23,25 @@ class Plugin
         
         // Register settings page
         add_action('admin_menu', [self::class, 'register_settings_page']);
+
+        // Hook into WooCommerce MCP to include HP abilities
+        add_filter('woocommerce_mcp_include_ability', [self::class, 'include_hp_abilities_in_wc_mcp'], 10, 2);
+    }
+
+    /**
+     * Include HP abilities in WooCommerce MCP server.
+     *
+     * @param bool   $include    Whether to include the ability.
+     * @param string $ability_id The ability ID.
+     * @return bool
+     */
+    public static function include_hp_abilities_in_wc_mcp(bool $include, string $ability_id): bool
+    {
+        // Include all HP abilities (hp-funnels/, hp-products/, hp-protocols/, hp-economics/, hp-customers/, hp-orders/, hp-inventory/)
+        if (str_starts_with($ability_id, 'hp-')) {
+            return true;
+        }
+        return $include;
     }
 
     /**
