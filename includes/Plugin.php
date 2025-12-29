@@ -37,7 +37,21 @@ class Plugin
      */
     public static function include_hp_abilities_in_wc_mcp(bool $include, string $ability_id): bool
     {
-        // Temporarily disable to see if WooCommerce tools return
+        // Enable only Read tools for now to find the culprit
+        $read_tools = [
+            'hp-funnels/explain-system',
+            'hp-funnels/schema',
+            'hp-funnels/styling-schema',
+            'hp-funnels/list',
+            'hp-funnels/get',
+            'hp-products/search',
+            'hp-products/get',
+            'hp-products/calculate-supply',
+        ];
+
+        if (in_array($ability_id, $read_tools)) {
+            return true;
+        }
         return $include;
     }
 
