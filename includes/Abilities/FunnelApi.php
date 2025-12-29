@@ -145,7 +145,7 @@ class FunnelApi
             return ['success' => false, 'error' => 'Slug is required'];
         }
 
-        $funnel = \HP_RW\Services\FunnelConfigLoader::loadBySlug($slug);
+        $funnel = \HP_RW\Services\FunnelConfigLoader::getBySlug($slug);
         if (!$funnel) {
             return ['success' => false, 'error' => 'Funnel not found'];
         }
@@ -200,19 +200,33 @@ class FunnelApi
             return $result;
         }
 
+        $postId = $result['post_id'];
+
+        // Mark as AI generated
+        update_post_meta($postId, '_hp_is_ai_generated', '1');
+
+        // Create initial version v1
+        if (class_exists('\HP_RW\Services\FunnelVersionControl')) {
+            \HP_RW\Services\FunnelVersionControl::createVersion(
+                $postId,
+                'Initial AI generation',
+                'ai_agent'
+            );
+        }
+
         // Log AI activity
         if (class_exists('\HP_RW\Admin\AiActivityLog')) {
             \HP_RW\Admin\AiActivityLog::logActivity(
-                $result['post_id'],
+                $postId,
                 $input['funnel']['slug'] ?? '',
                 'Created funnel via MCP ability',
-                'Applied'
+                'funnel_created'
             );
         }
 
         return [
             'success' => true,
-            'post_id' => $result['post_id'],
+            'post_id' => $postId,
             'slug' => $input['funnel']['slug'] ?? '',
             'message' => 'Funnel created successfully',
         ];
@@ -246,7 +260,7 @@ class FunnelApi
             \HP_RW\Services\FunnelVersionControl::createVersion(
                 $existing,
                 'Auto-backup before MCP update',
-                'ai-agent'
+                'ai_agent'
             );
         }
 
@@ -267,7 +281,7 @@ class FunnelApi
                 $existing,
                 $slug,
                 'Updated funnel via MCP ability',
-                'Applied'
+                'funnel_updated'
             );
         }
 
@@ -306,7 +320,7 @@ class FunnelApi
             \HP_RW\Services\FunnelVersionControl::createVersion(
                 $postId,
                 'Auto-backup before section update',
-                'ai-agent'
+                'ai_agent'
             );
         }
 
@@ -325,7 +339,7 @@ class FunnelApi
                 $postId,
                 $slug,
                 'Updated sections: ' . implode(', ', $updated),
-                'Applied'
+                'sections_updated'
             );
         }
 
