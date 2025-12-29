@@ -37,12 +37,17 @@ class Plugin
      */
     public static function include_hp_abilities_in_wc_mcp(bool $include, string $ability_id): bool
     {
-        // Enable ONLY the test tool to see if it shows up
-        $test_tools = [
+        // Adding first 5 real tools back
+        $enabled_tools = [
             'hp-test/hello',
+            'hp-funnels/explain-system',
+            'hp-funnels/schema',
+            'hp-funnels/styling-schema',
+            'hp-funnels/list',
+            'hp-funnels/get',
         ];
 
-        if (in_array($ability_id, $test_tools)) {
+        if (in_array($ability_id, $enabled_tools)) {
             return true;
         }
         return $include;
