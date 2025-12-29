@@ -157,6 +157,21 @@ class FunnelApi
     }
 
     /**
+     * Validate a funnel JSON object.
+     *
+     * @param array $input Funnel data.
+     * @return array Validation results.
+     */
+    public static function validateFunnel(array $input): array
+    {
+        if (!self::is_hp_rw_available()) {
+            return self::hp_rw_not_available();
+        }
+
+        return \HP_RW\Services\FunnelSchema::validate($input);
+    }
+
+    /**
      * Create a new funnel.
      *
      * @param array $input Funnel data.

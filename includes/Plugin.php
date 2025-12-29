@@ -228,18 +228,7 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [
-                    'funnel' => [
-                        'type' => 'object',
-                        'description' => 'Funnel metadata (slug, name)',
-                        'properties' => (object) [],
-                    ],
-                    'header' => ['type' => 'object', 'properties' => (object) []],
-                    'hero' => ['type' => 'object', 'properties' => (object) []],
-                    'offers' => ['type' => 'object', 'properties' => (object) []],
-                    'styling' => ['type' => 'object', 'properties' => (object) []],
-                ],
-                'required' => ['funnel'],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -260,18 +249,7 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [
-                    'slug' => [
-                        'type' => 'string',
-                        'description' => 'Funnel slug to update',
-                    ],
-                    'funnel' => ['type' => 'object', 'properties' => (object) []],
-                    'header' => ['type' => 'object', 'properties' => (object) []],
-                    'hero' => ['type' => 'object', 'properties' => (object) []],
-                    'offers' => ['type' => 'object', 'properties' => (object) []],
-                    'styling' => ['type' => 'object', 'properties' => (object) []],
-                ],
-                'required' => ['slug'],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -291,18 +269,7 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [
-                    'slug' => [
-                        'type' => 'string',
-                        'description' => 'Funnel slug',
-                    ],
-                    'sections' => [
-                        'type' => 'object',
-                        'description' => 'Object with section names as keys and section data as values',
-                        'properties' => (object) [],
-                    ],
-                ],
-                'required' => ['slug', 'sections'],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -407,6 +374,29 @@ class Plugin
             'execute_callback'    => [Abilities\FunnelApi::class, 'restoreVersion'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
             'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+
+        wp_register_ability('hp-funnels/validate', [
+            'label'       => __('Validate Funnel JSON', 'hp-abilities'),
+            'description' => __('Validate a funnel JSON object against the system schema without saving.', 'hp-abilities'),
+            'category'    => 'hp-funnels',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => (object) [],
+            ],
+            'output_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'valid' => ['type' => 'boolean'],
+                    'errors' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'string'],
+                    ],
+                ],
+            ],
+            'execute_callback'    => [Abilities\FunnelApi::class, 'validateFunnel'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
         wp_register_ability('hp-products/search', [
