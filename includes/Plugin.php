@@ -39,6 +39,7 @@ class Plugin
     {
         // Enable only Read tools for now to find the culprit
         $read_tools = [
+            'hp/test/hello',
             'hp-funnels/explain-system',
             'hp-funnels/schema',
             'hp-funnels/styling-schema',
@@ -79,6 +80,9 @@ class Plugin
         
         // Order status update ability
         self::register_order_status_ability();
+
+        // Test ability
+        self::register_test_ability();
 
         // Funnel abilities (requires HP-React-Widgets)
         self::register_funnel_abilities();
@@ -886,6 +890,48 @@ class Plugin
                 'show_in_rest' => true,
                 'annotations'  => [
                     'destructive' => true,
+                ],
+                'mcp' => ['public' => true, 'type' => 'tool'],
+            ],
+        ]);
+    }
+
+    /**
+     * Register test ability for MCP debugging.
+     */
+    private static function register_test_ability(): void
+    {
+        if (!function_exists('wp_register_ability')) {
+            return;
+        }
+
+        wp_register_ability('hp/test/hello', [
+            'label'       => __('MCP Test Hello', 'hp-abilities'),
+            'description' => __('A simple test ability to verify MCP tool registration.', 'hp-abilities'),
+            'category'    => 'hp-admin',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'name' => [
+                        'type'        => 'string',
+                        'description' => 'Your name',
+                    ],
+                ],
+            ],
+            'output_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'success'   => ['type' => 'boolean'],
+                    'message'   => ['type' => 'string'],
+                    'timestamp' => ['type' => 'string'],
+                ],
+            ],
+            'execute_callback'    => [Abilities\Test::class, 'hello'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'meta' => [
+                'show_in_rest' => true,
+                'annotations'  => [
+                    'readonly' => true,
                 ],
                 'mcp' => ['public' => true, 'type' => 'tool'],
             ],
