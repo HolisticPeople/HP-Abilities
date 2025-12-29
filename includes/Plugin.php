@@ -1041,6 +1041,12 @@ class Plugin
                         </tr>
                     </thead>
                     <tbody>
+                        <tr style="background: #f9f9f9;"><td colspan="3"><strong><?php echo esc_html__('Core Abilities', 'hp-abilities'); ?></strong></td></tr>
+                        <tr>
+                            <td><code>hp-test/hello</code></td>
+                            <td><?php echo esc_html__('Simple test ability for MCP debugging', 'hp-abilities'); ?></td>
+                            <td><?php echo esc_html__('Read', 'hp-abilities'); ?></td>
+                        </tr>
                         <tr>
                             <td><code>hp/customers/lookup</code></td>
                             <td><?php echo esc_html__('Lookup customer by email', 'hp-abilities'); ?></td>
