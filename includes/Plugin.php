@@ -74,6 +74,9 @@ class Plugin
 
         // Funnel abilities (requires HP-React-Widgets)
         self::register_funnel_abilities();
+
+        // SEO & Analytics abilities (requires HP-React-Widgets)
+        self::register_seo_abilities();
     }
 
     /**
@@ -95,6 +98,12 @@ class Plugin
         wp_register_ability_category('hp-funnels', [
             'label'       => __('HP Funnels', 'hp-abilities'),
             'description' => __('Holistic People sales funnel abilities', 'hp-abilities'),
+        ]);
+
+        // HP SEO category for SEO and schema abilities
+        wp_register_ability_category('hp-seo', [
+            'label'       => __('HP SEO & Analytics', 'hp-abilities'),
+            'description' => __('Holistic People SEO, schema, and analytics abilities', 'hp-abilities'),
         ]);
     }
 
@@ -680,6 +689,127 @@ class Plugin
     }
 
     /**
+     * Register SEO & Analytics related abilities.
+     */
+    private static function register_seo_abilities(): void
+    {
+        if (!function_exists('wp_register_ability')) {
+            return;
+        }
+
+        // Get funnel JSON-LD schema
+        wp_register_ability('hp-seo/funnel-schema', [
+            'label'       => __('Get Funnel JSON-LD Schema', 'hp-abilities'),
+            'description' => __('Get the complete JSON-LD Product schema for a funnel, including AggregateOffer with price range and reviews.', 'hp-abilities'),
+            'category'    => 'hp-seo',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'funnel_slug' => [
+                        'type' => 'string',
+                        'description' => 'The slug of the funnel to get schema for',
+                    ],
+                ],
+                'required' => ['funnel_slug'],
+            ],
+            'output_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'success' => ['type' => 'boolean'],
+                    'funnel_slug' => ['type' => 'string'],
+                    'schema' => [
+                        'type' => 'object',
+                        'description' => 'The JSON-LD schema object',
+                        'properties' => (object) [],
+                    ],
+                    'schema_json' => [
+                        'type' => 'string',
+                        'description' => 'The schema as a formatted JSON string',
+                    ],
+                ],
+            ],
+            'execute_callback'    => [Abilities\FunnelApi::class, 'getFunnelSchema'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+
+        // Get funnel price range
+        wp_register_ability('hp-economics/price-range', [
+            'label'       => __('Get Funnel Price Range', 'hp-abilities'),
+            'description' => __('Get the calculated min/max price range for a funnel. Prices are calculated on funnel save and never $0.', 'hp-abilities'),
+            'category'    => 'hp-seo',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'funnel_slug' => [
+                        'type' => 'string',
+                        'description' => 'The slug of the funnel to get price range for',
+                    ],
+                ],
+                'required' => ['funnel_slug'],
+            ],
+            'output_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'success' => ['type' => 'boolean'],
+                    'funnel_slug' => ['type' => 'string'],
+                    'price_range' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'min' => ['type' => 'number', 'description' => 'Minimum price (never $0)'],
+                            'max' => ['type' => 'number', 'description' => 'Maximum price'],
+                            'currency' => ['type' => 'string', 'description' => 'Currency code (e.g., USD)'],
+                            'display' => ['type' => 'string', 'description' => 'Formatted display string'],
+                        ],
+                    ],
+                    'brand' => ['type' => 'string', 'description' => 'Brand name for Google Shopping'],
+                    'availability' => ['type' => 'string', 'description' => 'Stock availability status'],
+                ],
+            ],
+            'execute_callback'    => [Abilities\FunnelApi::class, 'getPriceRange'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+
+        // Get canonical status for products and categories
+        wp_register_ability('hp-seo/canonical-status', [
+            'label'       => __('Get Canonical Override Status', 'hp-abilities'),
+            'description' => __('List products and categories that have funnel canonical overrides configured.', 'hp-abilities'),
+            'category'    => 'hp-seo',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => (object) [],
+            ],
+            'output_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'success' => ['type' => 'boolean'],
+                    'product_overrides' => ['type' => 'integer', 'description' => 'Number of products with funnel canonical overrides'],
+                    'category_overrides' => ['type' => 'integer', 'description' => 'Number of categories with funnel canonical overrides'],
+                    'data' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'products' => [
+                                'type' => 'array',
+                                'description' => 'Products with canonical overrides',
+                                'items' => ['type' => 'object', 'properties' => (object) []],
+                            ],
+                            'categories' => [
+                                'type' => 'array',
+                                'description' => 'Categories with canonical overrides',
+                                'items' => ['type' => 'object', 'properties' => (object) []],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            'execute_callback'    => [Abilities\FunnelApi::class, 'getCanonicalStatus'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+    }
+
+    /**
      * Register customer lookup ability.
      */
     private static function register_customer_lookup_ability(): void
@@ -1208,6 +1338,37 @@ class Plugin
                             <td><code>hp/economics/guidelines</code></td>
                             <td><?php echo esc_html__('Get/set economic guidelines', 'hp-abilities'); ?></td>
                             <td><?php echo esc_html__('Read/Write', 'hp-abilities'); ?></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card" style="margin-top: 20px;">
+                <h2><?php echo esc_html__('SEO & Analytics Abilities', 'hp-abilities'); ?></h2>
+                <p><?php echo esc_html__('These abilities provide SEO schema, pricing, and canonical override information.', 'hp-abilities'); ?></p>
+                <table class="widefat">
+                    <thead>
+                        <tr>
+                            <th><?php echo esc_html__('Ability', 'hp-abilities'); ?></th>
+                            <th><?php echo esc_html__('Description', 'hp-abilities'); ?></th>
+                            <th><?php echo esc_html__('Type', 'hp-abilities'); ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>hp-seo/funnel-schema</code></td>
+                            <td><?php echo esc_html__('Get JSON-LD Product schema with AggregateOffer and reviews', 'hp-abilities'); ?></td>
+                            <td><?php echo esc_html__('Read', 'hp-abilities'); ?></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-economics/price-range</code></td>
+                            <td><?php echo esc_html__('Get calculated min/max price range for a funnel', 'hp-abilities'); ?></td>
+                            <td><?php echo esc_html__('Read', 'hp-abilities'); ?></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-seo/canonical-status</code></td>
+                            <td><?php echo esc_html__('List products/categories with funnel canonical overrides', 'hp-abilities'); ?></td>
+                            <td><?php echo esc_html__('Read', 'hp-abilities'); ?></td>
                         </tr>
                     </tbody>
                 </table>
