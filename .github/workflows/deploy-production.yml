@@ -1,0 +1,57 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - production
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      KINSTAPROD_HOST: ${{ secrets.KINSTAPROD_HOST }}
+      KINSTAPROD_USER: ${{ secrets.KINSTAPROD_USER }}
+      KINSTAPROD_PORT: ${{ secrets.KINSTAPROD_PORT }}
+      KINSTAPROD_SSH_KEY: ${{ secrets.KINSTAPROD_SSH_KEY }}
+      KINSTAPROD_PLUGINS_BASE: ${{ secrets.KINSTAPROD_PLUGINS_BASE }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Add SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ env.KINSTAPROD_SSH_KEY }}
+
+      - name: Add known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${KINSTAPROD_PORT:-22}" "${KINSTAPROD_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Resolve deploy path
+        run: |
+          REMOTE_PATH="${KINSTAPROD_PLUGINS_BASE%/}/hp-abilities"
+          echo "Deploying plugin to: ${REMOTE_PATH}"
+          echo "REMOTE_PATH=$REMOTE_PATH" >> $GITHUB_ENV
+          # Ensure remote dir exists
+          ssh -p "${KINSTAPROD_PORT:-22}" "${KINSTAPROD_USER}@${KINSTAPROD_HOST}" "mkdir -p '${REMOTE_PATH}'"
+
+      - name: Rsync to Kinsta production
+        run: |
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.cursor' \
+            -e "ssh -p ${KINSTAPROD_PORT:-22}" \
+            ./ "${KINSTAPROD_USER}@${KINSTAPROD_HOST}:${REMOTE_PATH}/"
+
+      - name: Flush cache on production
+        run: |
+          ssh -p "${KINSTAPROD_PORT:-22}" "${KINSTAPROD_USER}@${KINSTAPROD_HOST}" "cd public && wp cache flush"
+
