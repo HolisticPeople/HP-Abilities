@@ -78,6 +78,9 @@ class Plugin
         // Funnel abilities (requires HP-React-Widgets)
         self::register_funnel_abilities();
 
+        // SEO fixes ability
+        self::register_apply_seo_fixes_ability();
+
         // SEO & Analytics abilities (requires HP-React-Widgets)
         self::register_seo_abilities();
     }
@@ -434,6 +437,7 @@ class Plugin
                             'problems' => ['type' => 'array', 'items' => ['type' => 'string']],
                             'improvements' => ['type' => 'array', 'items' => ['type' => 'string']],
                             'good' => ['type' => 'array', 'items' => ['type' => 'string']],
+                            'suggestions' => ['type' => 'object', 'properties' => (object) []],
                             'focus_keyword' => ['type' => 'string'],
                         ],
                     ],
@@ -842,6 +846,52 @@ class Plugin
             'execute_callback'    => [Abilities\FunnelApi::class, 'getCanonicalStatus'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
             'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+    }
+
+    /**
+     * Register the bulk SEO fix ability.
+     */
+    private static function register_apply_seo_fixes_ability(): void
+    {
+        if (!function_exists('wp_register_ability')) {
+            return;
+        }
+
+        wp_register_ability('hp-funnels/apply-seo-fixes', [
+            'label'       => __('Apply Funnel SEO Fixes', 'hp-abilities'),
+            'description' => __('Bulk apply SEO fixes to a funnel including metadata and content.', 'hp-abilities'),
+            'category'    => 'hp-funnels',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'slug' => ['type' => 'string', 'description' => 'Funnel slug'],
+                    'fixes' => [
+                        'type' => 'object',
+                        'description' => 'Map of fields to update (focus_keyword, meta_title, meta_description, etc.)',
+                        'properties' => [
+                            'focus_keyword' => ['type' => 'string'],
+                            'meta_title' => ['type' => 'string'],
+                            'meta_description' => ['type' => 'string'],
+                            'hero_image_alt' => ['type' => 'string'],
+                            'authority_image_alt' => ['type' => 'string'],
+                            'authority_bio' => ['type' => 'string', 'description' => 'HTML content for bio'],
+                        ],
+                    ],
+                ],
+                'required' => ['slug', 'fixes'],
+            ],
+            'output_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'success' => ['type' => 'boolean'],
+                    'message' => ['type' => 'string'],
+                    'updated_fields' => ['type' => 'array', 'items' => ['type' => 'string']],
+                ],
+            ],
+            'execute_callback'    => [Abilities\FunnelApi::class, 'applySeoFixes'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
     }
 

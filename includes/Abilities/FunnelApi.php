@@ -859,6 +859,101 @@ class FunnelApi
         ];
     }
 
+    /**
+     * Apply a set of SEO fixes to a funnel.
+     * 
+     * Accepts a map of fields to update, creates a backup version,
+     * updates the meta, and clears the cache.
+     * 
+     * @param array $input Input parameters:
+     *                     - slug (string) Funnel slug
+     *                     - fixes (array) Map of field names to values (e.g. ['focus_keyword' => 'Liver Detox'])
+     * @return array Result of the operation.
+     */
+    public static function applySeoFixes(array $input): array
+    {
+        if (!self::is_hp_rw_available()) {
+            return self::hp_rw_not_available();
+        }
+
+        $slug = sanitize_text_field($input['slug'] ?? '');
+        $fixes = $input['fixes'] ?? [];
+
+        if (empty($slug)) {
+            return ['success' => false, 'error' => 'slug is required'];
+        }
+        if (empty($fixes)) {
+            return ['success' => false, 'error' => 'fixes array is required'];
+        }
+
+        $postId = self::findFunnelBySlug($slug);
+        if (!$postId) {
+            return ['success' => false, 'error' => "Funnel with slug '$slug' not found."];
+        }
+
+        // 1. Create backup version
+        if (class_exists('\HP_RW\Services\FunnelVersionControl')) {
+            \HP_RW\Services\FunnelVersionControl::createVersion(
+                $postId,
+                'Auto-backup before bulk SEO fix',
+                'ai_agent'
+            );
+        }
+
+        $updated = [];
+
+        // Map SEO fields to ACF paths
+        $seoFieldMap = [
+            'focus_keyword' => 'seo_focus_keyword',
+            'meta_title' => 'seo_meta_title',
+            'meta_description' => 'seo_meta_description',
+            'hero_image_alt' => 'hero_image_alt',
+            'authority_image_alt' => 'authority_image_alt',
+            'authority_bio' => 'authority_bio',
+        ];
+
+        foreach ($fixes as $key => $value) {
+            $acfKey = $seoFieldMap[$key] ?? $key;
+            
+            // Special handling for HTML fields
+            if ($key === 'authority_bio') {
+                $value = wp_kses_post($value);
+            } else {
+                $value = is_string($value) ? sanitize_text_field($value) : $value;
+            }
+            
+            if (function_exists('update_field')) {
+                update_field($acfKey, $value, $postId);
+                $updated[] = $key;
+            } else {
+                update_post_meta($postId, $acfKey, $value);
+                $updated[] = $key . ' (post_meta)';
+            }
+        }
+
+        // 2. Clear cache
+        if (class_exists('\HP_RW\Services\FunnelConfigLoader')) {
+            \HP_RW\Services\FunnelConfigLoader::clearCache($postId);
+        }
+
+        // 3. Log activity
+        if (class_exists('\HP_RW\Admin\AiActivityLog')) {
+            \HP_RW\Admin\AiActivityLog::logActivity(
+                $postId,
+                $slug,
+                'Applied SEO fixes: ' . implode(', ', $updated),
+                'seo_fixed'
+            );
+        }
+
+        return [
+            'success' => true,
+            'message' => 'SEO fixes applied successfully.',
+            'updated_fields' => $updated,
+            'post_id' => $postId,
+        ];
+    }
+
     // ==========================================================================
     // HELPER METHODS
     // ==========================================================================
