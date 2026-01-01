@@ -19,6 +19,9 @@ $slug = $_GET['slug'] ?? 'liver-detox-protocol';
 try {
     echo "Testing funnel loading for: $slug\n\n";
     
+    // Mimic REST environment
+    if (!defined('REST_REQUEST')) define('REST_REQUEST', true);
+    
     echo "1. Calling \HP_RW\Services\FunnelConfigLoader::getBySlug($slug)...\n";
     $f = \HP_RW\Services\FunnelConfigLoader::getBySlug($slug);
     echo "   Result type: " . gettype($f) . "\n";
@@ -27,7 +30,13 @@ try {
     $res = \HP_Abilities\Abilities\FunnelApi::getFunnel(['slug' => $slug]);
     echo "   Success: " . ($res['success'] ? 'YES' : 'NO') . "\n";
     
-    echo "\n3. Calling \HP_Abilities\Abilities\FunnelApi::seoAudit(['slug' => $slug])...\n";
+    echo "\n3. Calling with stdClass input object...\n";
+    $inputObj = new stdClass();
+    $inputObj->slug = $slug;
+    $res3 = \HP_Abilities\Abilities\FunnelApi::getFunnel($inputObj);
+    echo "   Success with object: " . ($res3['success'] ? 'YES' : 'NO') . "\n";
+    
+    echo "\n4. Calling \HP_Abilities\Abilities\FunnelApi::seoAudit(['slug' => $slug])...\n";
     $res2 = \HP_Abilities\Abilities\FunnelApi::seoAudit(['slug' => $slug]);
     echo "   Success: " . ($res2['success'] ? 'YES' : 'NO') . "\n";
     
