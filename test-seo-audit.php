@@ -7,7 +7,7 @@ require_once dirname(__FILE__) . '/../../../wp-load.php';
 echo "=== Testing SEO Audit ===\n";
 
 try {
-    $result = HP_Abilities\Abilities\FunnelApi::seoAudit(['funnel_slug' => 'liver-detox-protocol']);
+    $result = HP_Abilities\Abilities\FunnelApi::seoAudit(['slug' => 'liver-detox-protocol']);
     echo json_encode($result, JSON_PRETTY_PRINT);
 } catch (Exception $e) {
     echo "ERROR: " . $e->getMessage() . "\n";
