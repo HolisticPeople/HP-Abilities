@@ -129,7 +129,7 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -149,7 +149,7 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -169,7 +169,7 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -190,7 +190,7 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -228,7 +228,7 @@ class Plugin
                     'success' => ['type' => 'boolean'],
                     'funnel' => [
                         'type' => 'object',
-                        'properties' => [],
+                        'properties' => (object) [],
                     ],
                 ],
             ],
@@ -243,7 +243,7 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -264,7 +264,7 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -284,7 +284,7 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -397,7 +397,7 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -505,7 +505,7 @@ class Plugin
                     'success' => ['type' => 'boolean'],
                     'product' => [
                         'type' => 'object',
-                        'properties' => [],
+                        'properties' => (object) [],
                     ],
                 ],
             ],
@@ -588,7 +588,7 @@ class Plugin
                     ],
                     'economics' => [
                         'type' => 'object',
-                        'properties' => [],
+                        'properties' => (object) [],
                     ],
                     'offer_options' => [
                         'type' => 'array',
@@ -718,7 +718,7 @@ class Plugin
                     'success' => ['type' => 'boolean'],
                     'guidelines' => [
                         'type' => 'object',
-                        'properties' => [],
+                        'properties' => (object) [],
                     ],
                 ],
             ],
@@ -760,7 +760,7 @@ class Plugin
                     'schema' => [
                         'type' => 'object',
                         'description' => 'The JSON-LD schema object',
-                        'properties' => [],
+                        'properties' => (object) [],
                     ],
                     'schema_json' => [
                         'type' => 'string',
@@ -818,7 +818,7 @@ class Plugin
             'category'    => 'hp-seo',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -931,7 +931,7 @@ class Plugin
                     'last_order_date' => ['type' => 'string'],
                     'billing_address' => [
                         'type' => 'object',
-                        'properties' => [],
+                        'properties' => (object) [],
                     ],
                 ],
             ],
