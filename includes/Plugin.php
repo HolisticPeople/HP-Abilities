@@ -689,7 +689,7 @@ class Plugin
                     ],
                 ],
             ],
-            'execute_callback'    => [Abilities\FunnelApi::class, 'validateOffer'],
+            'execute_callback'    => [Abilities\FunnelApi::class, 'validateEconomics'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
             'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
@@ -768,7 +768,7 @@ class Plugin
                     ],
                 ],
             ],
-            'execute_callback'    => [Abilities\FunnelApi::class, 'getFunnelSchema'],
+            'execute_callback'    => [Abilities\FunnelApi::class, 'getSeoSchema'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
             'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
