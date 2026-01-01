@@ -59,7 +59,7 @@ try {
             'success' => ['type' => 'boolean'],
             'funnel' => [
                 'type' => 'object',
-                'properties' => (object) [],
+                'properties' => [],  // Fixed: use [] instead of (object) []
             ],
         ],
     ];
