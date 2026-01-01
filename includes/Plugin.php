@@ -228,7 +228,7 @@ class Plugin
                     'success' => ['type' => 'boolean'],
                     'funnel' => [
                         'type' => 'object',
-                        'properties' => (object) [],
+                        'additionalProperties' => true,
                     ],
                 ],
             ],
@@ -431,15 +431,7 @@ class Plugin
                     'success' => ['type' => 'boolean'],
                     'data' => [
                         'type' => 'object',
-                        'properties' => [
-                            'status' => ['type' => 'string'],
-                            'score' => ['type' => 'object'],
-                            'problems' => ['type' => 'array', 'items' => ['type' => 'string']],
-                            'improvements' => ['type' => 'array', 'items' => ['type' => 'string']],
-                            'good' => ['type' => 'array', 'items' => ['type' => 'string']],
-                            'suggestions' => ['type' => 'object', 'properties' => []],
-                            'focus_keyword' => ['type' => 'string'],
-                        ],
+                        'additionalProperties' => true,
                     ],
                 ],
             ],
