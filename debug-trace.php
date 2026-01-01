@@ -2,7 +2,11 @@
 /**
  * Helper script to find the exact line causing the stdClass error.
  */
-include 'wp-load.php';
+$path = dirname(__FILE__);
+while ($path != '/' && !file_exists($path . '/wp-load.php')) {
+    $path = dirname($path);
+}
+include $path . '/wp-load.php';
 
 set_error_handler(function($s,$m,$f,$l){ 
     throw new ErrorException($m,0,$s,$f,$l); 
