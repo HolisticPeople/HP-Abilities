@@ -56,3 +56,6 @@ jobs:
           ssh -p "${KINSTAPROD_PORT:-22}" "${KINSTAPROD_USER}@${KINSTAPROD_HOST}" "cd public && wp cache flush"
 
 
+
+
+
