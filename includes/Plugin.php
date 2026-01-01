@@ -1146,7 +1146,7 @@ class Plugin
             return;
         }
 
-        wp_register_ability('hp-test/hello', [
+        wp_register_ability('hp-test-hello', [
             'label'       => __('MCP Test Hello', 'hp-abilities'),
             'description' => __('A simple test ability to verify MCP tool registration.', 'hp-abilities'),
             'category'    => 'hp-admin',
