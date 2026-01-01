@@ -25,7 +25,7 @@ class Plugin
         add_action('admin_menu', [self::class, 'register_settings_page']);
 
         // Hook into WooCommerce MCP to include HP abilities
-        add_filter('woocommerce_mcp_include_ability', [self::class, 'include_hp_abilities_in_wc_mcp'], 99, 2);
+        add_filter('woocommerce_mcp_include_ability', [self::class, 'include_hp_abilities_in_wc_mcp'], 10, 2);
 
         // ALWAYS register REST API endpoints for internal tools (like manual SEO audit)
         add_action('rest_api_init', [self::class, 'register_rest_routes']);
@@ -1146,7 +1146,7 @@ class Plugin
             return;
         }
 
-        wp_register_ability('hp-test-hello', [
+        wp_register_ability('hp-test/hello', [
             'label'       => __('MCP Test Hello', 'hp-abilities'),
             'description' => __('A simple test ability to verify MCP tool registration.', 'hp-abilities'),
             'category'    => 'hp-admin',
