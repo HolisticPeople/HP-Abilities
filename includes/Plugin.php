@@ -1176,6 +1176,18 @@ class Plugin
                 return current_user_can('manage_woocommerce');
             },
         ]);
+
+        register_rest_route($namespace, '/funnels/(?P<slug>[a-zA-Z0-9-]+)/seo-audit', [
+            'methods'             => 'GET',
+            'callback'            => function ($request) {
+                return Abilities\FunnelApi::seoAudit([
+                    'slug' => $request->get_param('slug'),
+                ]);
+            },
+            'permission_callback' => function () {
+                return current_user_can('manage_woocommerce');
+            },
+        ]);
     }
 
     /**
