@@ -15,66 +15,69 @@ set_error_handler(function($s,$m,$f,$l){
 header('Content-Type: text/plain');
 
 $slug = $_GET['slug'] ?? 'liver-detox-protocol';
-$test = $_GET['test'] ?? 'all';
 
 try {
-    echo "===== MCP Ability Execution Test =====\n\n";
+    echo "===== Testing getFunnel step by step =====\n\n";
     
-    // Mimic REST environment
-    if (!defined('REST_REQUEST')) define('REST_REQUEST', true);
+    // Simulate authenticated user
+    wp_set_current_user(1); // Admin user
     
-    // Get the ability like MCP does
-    echo "1. Getting ability 'hp-funnels/get' via wp_get_ability()...\n";
-    $ability = wp_get_ability('hp-funnels/get');
-    if (!$ability) {
-        echo "   ERROR: Ability not found!\n";
-        exit(1);
-    }
-    echo "   Found: " . $ability->get_name() . "\n";
+    echo "1. Direct call to FunnelApi::getFunnel()...\n";
+    $result = \HP_Abilities\Abilities\FunnelApi::getFunnel(['slug' => $slug]);
+    echo "   Success: " . ($result['success'] ? 'YES' : 'NO') . "\n";
+    echo "   Has funnel: " . (isset($result['funnel']) ? 'YES' : 'NO') . "\n";
     
-    // Simulate input exactly like MCP sends it (from JSON decode - as array)
-    echo "\n2. Creating input (simulating get_json_params which returns array)...\n";
-    $input = ['slug' => $slug];
-    echo "   Input type: " . gettype($input) . "\n";
-    echo "   Input: " . json_encode($input) . "\n";
-    
-    // Check permissions like MCP does
-    echo "\n3. Checking permissions via ability->check_permissions()...\n";
-    $has_permission = $ability->check_permissions($input);
-    if (true !== $has_permission) {
-        echo "   Permission check returned: " . var_export($has_permission, true) . "\n";
-    } else {
-        echo "   Permission check passed.\n";
-    }
-    
-    // Execute like MCP does
-    echo "\n4. Executing via ability->execute()...\n";
-    $result = $ability->execute($input);
-    
-    if (is_wp_error($result)) {
-        echo "   WP_Error: " . $result->get_error_message() . "\n";
-    } else {
-        echo "   Success: " . (isset($result['success']) && $result['success'] ? 'YES' : 'NO') . "\n";
-        echo "   Result type: " . gettype($result) . "\n";
-        echo "   Has funnel: " . (isset($result['funnel']) ? 'YES' : 'NO') . "\n";
-        if (isset($result['funnel'])) {
-            echo "   Funnel slug: " . ($result['funnel']['slug'] ?? 'N/A') . "\n";
-        }
-    }
-    
-    // Also test seoAudit for comparison
-    if ($test === 'all') {
-        echo "\n\n===== Testing seoAudit for comparison =====\n\n";
-        $ability2 = wp_get_ability('hp-funnels/seo-audit');
-        if ($ability2) {
-            $result2 = $ability2->execute(['slug' => $slug]);
-            if (is_wp_error($result2)) {
-                echo "   WP_Error: " . $result2->get_error_message() . "\n";
-            } else {
-                echo "   Success: " . (isset($result2['success']) && $result2['success'] ? 'YES' : 'NO') . "\n";
-                echo "   Status: " . ($result2['data']['status'] ?? 'N/A') . "\n";
+    // Check for stdClass in result
+    echo "\n2. Checking for stdClass objects in result...\n";
+    function findStdClass($data, $path = '') {
+        if (is_object($data)) {
+            if ($data instanceof stdClass) {
+                echo "   FOUND stdClass at: $path\n";
+                echo "   Keys: " . implode(', ', array_keys((array)$data)) . "\n";
+                return true;
             }
         }
+        if (is_array($data)) {
+            foreach ($data as $key => $value) {
+                if (findStdClass($value, $path . "[$key]")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    $hasStdClass = findStdClass($result);
+    if (!$hasStdClass) {
+        echo "   No stdClass objects found - all good!\n";
+    }
+    
+    // Test output validation
+    echo "\n3. Testing output validation (what WP_Ability does after execute)...\n";
+    $output_schema = [
+        'type' => 'object',
+        'properties' => [
+            'success' => ['type' => 'boolean'],
+            'funnel' => [
+                'type' => 'object',
+                'properties' => (object) [],
+            ],
+        ],
+    ];
+    $valid_output = rest_validate_value_from_schema($result, $output_schema, 'output');
+    if (is_wp_error($valid_output)) {
+        echo "   Validation failed: " . $valid_output->get_error_message() . "\n";
+    } else {
+        echo "   Output validation passed.\n";
+    }
+    
+    // Test via ability->execute with auth
+    echo "\n4. Calling via ability->execute() with auth...\n";
+    $ability = wp_get_ability('hp-funnels/get');
+    $result2 = $ability->execute(['slug' => $slug]);
+    if (is_wp_error($result2)) {
+        echo "   WP_Error: " . $result2->get_error_message() . "\n";
+    } else {
+        echo "   Success: " . ($result2['success'] ? 'YES' : 'NO') . "\n";
     }
     
     echo "\n===== Test Complete =====\n";
