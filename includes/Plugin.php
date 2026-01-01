@@ -411,7 +411,7 @@ class Plugin
         wp_register_ability('hp-funnels/seo-audit', [
             'label'       => __('SEO Audit', 'hp-abilities'),
             'description' => __('Run a deep SEO and readability audit on a funnel.', 'hp-abilities'),
-            'category'    => 'hp-seo',
+            'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
