@@ -816,6 +816,49 @@ class FunnelApi
         ];
     }
 
+    /**
+     * Run an SEO audit on a funnel.
+     * 
+     * @param array $input Input parameters:
+     *                     - slug (string) Funnel slug
+     *                     - data (array) Optional: Fresh funnel data to audit before saving
+     * @return array Audit results.
+     */
+    public static function seoAudit(array $input): array
+    {
+        if (!self::is_hp_rw_available()) {
+            return self::hp_rw_not_available();
+        }
+
+        $slug = $input['slug'] ?? '';
+        $data = $input['data'] ?? [];
+
+        if (empty($slug) && empty($data)) {
+            return [
+                'success' => false,
+                'error' => 'Either slug or data must be provided for audit.',
+            ];
+        }
+
+        if (!empty($data)) {
+            $report = \HP_RW\Services\FunnelSeoAuditor::audit($data);
+        } else {
+            $postId = self::findFunnelBySlug($slug);
+            if (!$postId) {
+                return [
+                    'success' => false,
+                    'error' => "Funnel with slug '$slug' not found.",
+                ];
+            }
+            $report = \HP_RW\Services\FunnelSeoAuditor::audit($postId);
+        }
+
+        return [
+            'success' => true,
+            'data' => $report,
+        ];
+    }
+
     // ==========================================================================
     // HELPER METHODS
     // ==========================================================================

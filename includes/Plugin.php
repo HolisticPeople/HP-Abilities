@@ -408,6 +408,39 @@ class Plugin
             'meta' => ['show_in_rest' => true, 'annotations' => ['readonly' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
+        wp_register_ability('hp-funnels/seo-audit', [
+            'label'       => __('SEO Audit', 'hp-abilities'),
+            'description' => __('Run a deep SEO and readability audit on a funnel.', 'hp-abilities'),
+            'category'    => 'hp-seo',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'slug' => ['type' => 'string', 'description' => 'Funnel slug to audit'],
+                    'data' => ['type' => 'object', 'description' => 'Optional: Fresh funnel data to audit before saving'],
+                ],
+            ],
+            'output_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'success' => ['type' => 'boolean'],
+                    'data' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'status' => ['type' => 'string'],
+                            'score' => ['type' => 'object'],
+                            'problems' => ['type' => 'array', 'items' => ['type' => 'string']],
+                            'improvements' => ['type' => 'array', 'items' => ['type' => 'string']],
+                            'good' => ['type' => 'array', 'items' => ['type' => 'string']],
+                            'focus_keyword' => ['type' => 'string'],
+                        ],
+                    ],
+                ],
+            ],
+            'execute_callback'    => [Abilities\FunnelApi::class, 'seoAudit'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'meta' => ['show_in_rest' => true, 'mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+
         wp_register_ability('hp-products/search', [
             'label'       => __('Search Products', 'hp-abilities'),
             'description' => __('Search WooCommerce products with filters.', 'hp-abilities'),
