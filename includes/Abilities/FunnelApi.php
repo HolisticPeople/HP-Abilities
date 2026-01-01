@@ -39,10 +39,10 @@ class FunnelApi
     /**
      * Get complete funnel system documentation.
      *
-     * @param array $input Input parameters (none required).
+     * @param mixed $input Input parameters (none required).
      * @return array System explanation.
      */
-    public static function explainSystem(array $input): array
+    public static function explainSystem($input): array
     {
         if (!self::is_hp_rw_available()) {
             return self::hp_rw_not_available();
@@ -57,10 +57,10 @@ class FunnelApi
     /**
      * Get funnel JSON schema with AI generation hints.
      *
-     * @param array $input Input parameters (none required).
+     * @param mixed $input Input parameters (none required).
      * @return array Schema with hints.
      */
-    public static function getSchema(array $input): array
+    public static function getSchema($input): array
     {
         if (!self::is_hp_rw_available()) {
             return self::hp_rw_not_available();
@@ -75,10 +75,10 @@ class FunnelApi
     /**
      * Get styling schema with theme presets.
      *
-     * @param array $input Input parameters (none required).
+     * @param mixed $input Input parameters (none required).
      * @return array Styling schema.
      */
-    public static function getStylingSchema(array $input): array
+    public static function getStylingSchema($input): array
     {
         if (!self::is_hp_rw_available()) {
             return self::hp_rw_not_available();
@@ -93,15 +93,16 @@ class FunnelApi
     /**
      * List all funnels.
      *
-     * @param array $input Input parameters (none required).
+     * @param mixed $input Input parameters (none required).
      * @return array List of funnels.
      */
-    public static function listFunnels(array $input): array
+    public static function listFunnels($input): array
     {
         if (!self::is_hp_rw_available()) {
             return self::hp_rw_not_available();
         }
 
+        $input = self::ensureArrayRecursive($input);
         $funnels = get_posts([
             'post_type' => 'hp-funnel',
             'post_status' => 'any',
@@ -131,15 +132,16 @@ class FunnelApi
     /**
      * Get a complete funnel by slug.
      *
-     * @param array $input Input with 'slug'.
+     * @param mixed $input Input with 'slug'.
      * @return array Complete funnel data.
      */
-    public static function getFunnel(array $input): array
+    public static function getFunnel($input): array
     {
         if (!self::is_hp_rw_available()) {
             return self::hp_rw_not_available();
         }
 
+        $input = self::ensureArrayRecursive($input);
         $slug = sanitize_text_field($input['slug'] ?? '');
         if (empty($slug)) {
             return ['success' => false, 'error' => 'Slug is required'];
@@ -157,226 +159,122 @@ class FunnelApi
     }
 
     /**
-     * Validate a funnel JSON object.
+     * Create a new funnel from JSON.
      *
-     * @param array $input Funnel data.
-     * @return array Validation results.
+     * @param mixed $input Funnel data.
+     * @return array Result.
      */
-    public static function validateFunnel(array $input): array
+    public static function createFunnel($input): array
     {
         if (!self::is_hp_rw_available()) {
             return self::hp_rw_not_available();
         }
 
-        return \HP_RW\Services\FunnelSchema::validate($input);
-    }
-
-    /**
-     * Create a new funnel.
-     *
-     * @param array $input Funnel data.
-     * @return array Created funnel info.
-     */
-    public static function createFunnel(array $input): array
-    {
-        if (!self::is_hp_rw_available()) {
-            return self::hp_rw_not_available();
-        }
-
-        // Validate input schema
-        $validation = \HP_RW\Services\FunnelSchema::validate($input);
-        if (!$validation['valid']) {
-            return [
-                'success' => false,
-                'error' => 'Schema validation failed',
-                'errors' => $validation['errors'],
-            ];
-        }
-
-        // Import the funnel using FunnelImporter
-        $result = \HP_RW\Services\FunnelImporter::import($input);
+        $input = self::ensureArrayRecursive($input);
+        $result = \HP_RW\Services\FunnelConfigLoader::createFunnel($input);
         
-        if (!$result['success']) {
-            return $result;
-        }
-
-        $postId = $result['post_id'];
-
-        // Mark as AI generated
-        update_post_meta($postId, '_hp_is_ai_generated', '1');
-
-        // Create initial version v1
-        if (class_exists('\HP_RW\Services\FunnelVersionControl')) {
-            \HP_RW\Services\FunnelVersionControl::createVersion(
-                $postId,
-                'Initial AI generation',
-                'ai_agent'
-            );
-        }
-
-        // Log AI activity
-        if (class_exists('\HP_RW\Admin\AiActivityLog')) {
-            \HP_RW\Admin\AiActivityLog::logActivity(
-                $postId,
-                $input['funnel']['slug'] ?? '',
-                'Created funnel via MCP ability',
-                'funnel_created'
-            );
+        if (is_wp_error($result)) {
+            return ['success' => false, 'error' => $result->get_error_message()];
         }
 
         return [
             'success' => true,
-            'post_id' => $postId,
-            'slug' => $input['funnel']['slug'] ?? '',
-            'message' => 'Funnel created successfully',
+            'post_id' => $result['post_id'],
+            'slug' => $result['slug'],
         ];
     }
 
     /**
      * Update an existing funnel.
      *
-     * @param array $input Funnel data with 'slug'.
-     * @return array Updated funnel info.
+     * @param mixed $input Updated funnel data (including slug).
+     * @return array Result.
      */
-    public static function updateFunnel(array $input): array
+    public static function updateFunnel($input): array
     {
         if (!self::is_hp_rw_available()) {
             return self::hp_rw_not_available();
         }
 
-        $slug = sanitize_text_field($input['slug'] ?? '');
+        $input = self::ensureArrayRecursive($input);
+        $slug = $input['slug'] ?? '';
         if (empty($slug)) {
-            return ['success' => false, 'error' => 'Slug is required'];
+            return ['success' => false, 'error' => 'Slug is required to update'];
         }
 
-        // Find existing funnel
-        $existing = self::findFunnelBySlug($slug);
-        if (!$existing) {
-            return ['success' => false, 'error' => 'Funnel not found'];
+        $result = \HP_RW\Services\FunnelConfigLoader::updateFunnel($slug, $input);
+        
+        if (is_wp_error($result)) {
+            return ['success' => false, 'error' => $result->get_error_message()];
         }
 
-        // Create backup before updating
-        if (class_exists('\HP_RW\Services\FunnelVersionControl')) {
-            \HP_RW\Services\FunnelVersionControl::createVersion(
-                $existing,
-                'Auto-backup before MCP update',
-                'ai_agent'
-            );
-        }
-
-        // Validate and import
-        $validation = \HP_RW\Services\FunnelSchema::validate($input);
-        if (!$validation['valid']) {
-            return [
-                'success' => false,
-                'error' => 'Schema validation failed',
-                'errors' => $validation['errors'],
-            ];
-        }
-
-        $result = \HP_RW\Services\FunnelImporter::import($input, $existing);
-
-        if ($result['success'] && class_exists('\HP_RW\Admin\AiActivityLog')) {
-            \HP_RW\Admin\AiActivityLog::logActivity(
-                $existing,
-                $slug,
-                'Updated funnel via MCP ability',
-                'funnel_updated'
-            );
-        }
-
-        return $result;
+        return [
+            'success' => true,
+            'post_id' => $result['post_id'],
+            'slug' => $result['slug'],
+        ];
     }
 
     /**
      * Update specific sections of a funnel.
      *
-     * @param array $input Input with 'slug' and 'sections'.
-     * @return array Update result.
+     * @param mixed $input Array with 'slug' and 'sections' map.
+     * @return array Result.
      */
-    public static function updateSections(array $input): array
+    public static function updateSections($input): array
     {
         if (!self::is_hp_rw_available()) {
             return self::hp_rw_not_available();
         }
 
-        $slug = sanitize_text_field($input['slug'] ?? '');
+        $input = self::ensureArrayRecursive($input);
+        $slug = $input['slug'] ?? '';
         $sections = $input['sections'] ?? [];
 
         if (empty($slug)) {
             return ['success' => false, 'error' => 'Slug is required'];
         }
-        if (empty($sections)) {
-            return ['success' => false, 'error' => 'Sections data is required'];
+
+        $result = \HP_RW\Services\FunnelConfigLoader::updateSections($slug, $sections);
+        
+        if (is_wp_error($result)) {
+            return ['success' => false, 'error' => $result->get_error_message()];
         }
 
-        $postId = self::findFunnelBySlug($slug);
-        if (!$postId) {
-            return ['success' => false, 'error' => 'Funnel not found'];
-        }
-
-        // Create backup
-        if (class_exists('\HP_RW\Services\FunnelVersionControl')) {
-            \HP_RW\Services\FunnelVersionControl::createVersion(
-                $postId,
-                'Auto-backup before section update',
-                'ai_agent'
-            );
-        }
-
-        $updated = [];
-        foreach ($sections as $sectionName => $sectionData) {
-            // Update ACF fields for this section
-            $fieldName = $sectionName;
-            if (function_exists('update_field')) {
-                update_field($fieldName, $sectionData, $postId);
-                $updated[] = $sectionName;
-            }
-        }
-
-        if (class_exists('\HP_RW\Admin\AiActivityLog')) {
-            \HP_RW\Admin\AiActivityLog::logActivity(
-                $postId,
-                $slug,
-                'Updated sections: ' . implode(', ', $updated),
-                'sections_updated'
-            );
-        }
-
-        return [
-            'success' => true,
-            'post_id' => $postId,
-            'updated_sections' => $updated,
-        ];
+        return ['success' => true];
     }
 
     /**
-     * List versions of a funnel.
+     * List saved versions of a funnel.
      *
-     * @param array $input Input with 'slug'.
-     * @return array Version list.
+     * @param mixed $input Input with 'slug'.
+     * @return array Versions list.
      */
-    public static function listVersions(array $input): array
+    public static function listVersions($input): array
     {
         if (!self::is_hp_rw_available()) {
             return self::hp_rw_not_available();
         }
 
-        $slug = sanitize_text_field($input['slug'] ?? '');
+        $input = self::ensureArrayRecursive($input);
+        $slug = $input['slug'] ?? '';
         if (empty($slug)) {
             return ['success' => false, 'error' => 'Slug is required'];
         }
 
         $postId = self::findFunnelBySlug($slug);
         if (!$postId) {
-            return ['success' => false, 'error' => 'Funnel not found'];
+            return ['success' => false, 'error' => "Funnel '$slug' not found"];
         }
 
-        $versions = \HP_RW\Services\FunnelVersionControl::getVersions($postId);
+        if (!class_exists('\HP_RW\Services\FunnelVersionControl')) {
+            return ['success' => false, 'error' => 'Version control service not available'];
+        }
 
+        $versions = \HP_RW\Services\FunnelVersionControl::listVersions($postId);
+        
         return [
             'success' => true,
-            'slug' => $slug,
             'versions' => $versions,
         ];
     }
@@ -384,17 +282,18 @@ class FunnelApi
     /**
      * Create a version backup.
      *
-     * @param array $input Input with 'slug' and optional 'description'.
-     * @return array Created version info.
+     * @param mixed $input Array with 'slug' and 'description'.
+     * @return array Result.
      */
-    public static function createVersion(array $input): array
+    public static function createVersion($input): array
     {
         if (!self::is_hp_rw_available()) {
             return self::hp_rw_not_available();
         }
 
-        $slug = sanitize_text_field($input['slug'] ?? '');
-        $description = sanitize_text_field($input['description'] ?? 'Manual backup via MCP');
+        $input = self::ensureArrayRecursive($input);
+        $slug = $input['slug'] ?? '';
+        $description = $input['description'] ?? 'Manual backup';
 
         if (empty($slug)) {
             return ['success' => false, 'error' => 'Slug is required'];
@@ -402,36 +301,36 @@ class FunnelApi
 
         $postId = self::findFunnelBySlug($slug);
         if (!$postId) {
-            return ['success' => false, 'error' => 'Funnel not found'];
+            return ['success' => false, 'error' => "Funnel '$slug' not found"];
         }
 
-        $versionId = \HP_RW\Services\FunnelVersionControl::createVersion(
-            $postId,
-            $description,
-            'ai-agent'
-        );
+        if (!class_exists('\HP_RW\Services\FunnelVersionControl')) {
+            return ['success' => false, 'error' => 'Version control service not available'];
+        }
 
+        $versionId = \HP_RW\Services\FunnelVersionControl::createVersion($postId, $description, 'ai_agent');
+        
         return [
             'success' => true,
             'version_id' => $versionId,
-            'slug' => $slug,
         ];
     }
 
     /**
-     * Restore a version.
+     * Restore a funnel version.
      *
-     * @param array $input Input with 'slug' and 'version_id'.
-     * @return array Restore result.
+     * @param mixed $input Array with 'slug' and 'version_id'.
+     * @return array Result.
      */
-    public static function restoreVersion(array $input): array
+    public static function restoreVersion($input): array
     {
         if (!self::is_hp_rw_available()) {
             return self::hp_rw_not_available();
         }
 
-        $slug = sanitize_text_field($input['slug'] ?? '');
-        $versionId = sanitize_text_field($input['version_id'] ?? '');
+        $input = self::ensureArrayRecursive($input);
+        $slug = $input['slug'] ?? '';
+        $versionId = $input['version_id'] ?? '';
 
         if (empty($slug) || empty($versionId)) {
             return ['success' => false, 'error' => 'Slug and version_id are required'];
@@ -439,397 +338,61 @@ class FunnelApi
 
         $postId = self::findFunnelBySlug($slug);
         if (!$postId) {
-            return ['success' => false, 'error' => 'Funnel not found'];
+            return ['success' => false, 'error' => "Funnel '$slug' not found"];
         }
 
-        $result = \HP_RW\Services\FunnelVersionControl::restoreVersion($postId, $versionId, true);
-
-        if ($result && class_exists('\HP_RW\Admin\AiActivityLog')) {
-            \HP_RW\Admin\AiActivityLog::logActivity(
-                $postId,
-                $slug,
-                'Restored version ' . $versionId,
-                'Applied'
-            );
+        if (!class_exists('\HP_RW\Services\FunnelVersionControl')) {
+            return ['success' => false, 'error' => 'Version control service not available'];
         }
 
-        return [
-            'success' => $result,
-            'message' => $result ? 'Version restored successfully' : 'Failed to restore version',
-        ];
-    }
-
-    /**
-     * Search products.
-     *
-     * @param array $input Search filters.
-     * @return array Product list.
-     */
-    public static function searchProducts(array $input): array
-    {
-        if (!self::is_hp_rw_available()) {
-            return self::hp_rw_not_available();
-        }
-
-        $products = \HP_RW\Services\ProductCatalogService::searchProducts($input);
-
-        return [
-            'success' => true,
-            'count' => count($products),
-            'products' => $products,
-        ];
-    }
-
-    /**
-     * Get product details by SKU.
-     *
-     * @param array $input Input with 'sku'.
-     * @return array Product details.
-     */
-    public static function getProduct(array $input): array
-    {
-        if (!self::is_hp_rw_available()) {
-            return self::hp_rw_not_available();
-        }
-
-        $sku = sanitize_text_field($input['sku'] ?? '');
-        if (empty($sku)) {
-            return ['success' => false, 'error' => 'SKU is required'];
-        }
-
-        $product = \HP_RW\Services\ProductCatalogService::getProductDetails($sku);
-        if (!$product) {
-            return ['success' => false, 'error' => 'Product not found'];
-        }
-
-        return [
-            'success' => true,
-            'product' => $product,
-        ];
-    }
-
-    /**
-     * Calculate supply for a protocol.
-     *
-     * @param array $input Input with 'sku', 'days', and optional 'servings_per_day'.
-     * @return array Supply calculation.
-     */
-    public static function calculateSupply(array $input): array
-    {
-        if (!self::is_hp_rw_available()) {
-            return self::hp_rw_not_available();
-        }
-
-        $sku = sanitize_text_field($input['sku'] ?? '');
-        $days = absint($input['days'] ?? 30);
-        $servingsPerDay = absint($input['servings_per_day'] ?? 1);
-
-        if (empty($sku)) {
-            return ['success' => false, 'error' => 'SKU is required'];
-        }
-
-        $result = \HP_RW\Services\ProductCatalogService::calculateSupply($sku, $days, $servingsPerDay);
-
-        return array_merge(['success' => true], $result);
-    }
-
-    /**
-     * Build a product kit from a protocol.
-     *
-     * @param array $input Protocol definition.
-     * @return array Kit recommendation.
-     */
-    public static function buildKit(array $input): array
-    {
-        if (!self::is_hp_rw_available()) {
-            return self::hp_rw_not_available();
-        }
-
-        $result = \HP_RW\Services\ProtocolKitBuilder::buildKitFromProtocol($input);
-
-        return array_merge(['success' => true], $result);
-    }
-
-    /**
-     * Calculate offer profitability.
-     *
-     * @param array $input Offer details.
-     * @return array Profitability analysis.
-     */
-    public static function calculateEconomics(array $input): array
-    {
-        if (!self::is_hp_rw_available()) {
-            return self::hp_rw_not_available();
-        }
-
-        $items = $input['items'] ?? [];
-        $price = floatval($input['price'] ?? 0);
-        $shippingScenario = sanitize_text_field($input['shipping_scenario'] ?? 'domestic');
-
-        $result = \HP_RW\Services\EconomicsService::calculateOfferProfitability(
-            $items,
-            $price,
-            $shippingScenario
-        );
-
-        return array_merge(['success' => true], $result);
-    }
-
-    /**
-     * Validate offer against economic guidelines.
-     *
-     * @param array $input Offer to validate.
-     * @return array Validation result.
-     */
-    public static function validateOffer(array $input): array
-    {
-        if (!self::is_hp_rw_available()) {
-            return self::hp_rw_not_available();
-        }
-
-        $shippingScenario = sanitize_text_field($input['shipping_scenario'] ?? 'domestic');
-        $result = \HP_RW\Services\EconomicsService::validateOffer($input, $shippingScenario);
-
-        return array_merge(['success' => true], $result);
-    }
-
-    /**
-     * Get or set economic guidelines.
-     *
-     * @param array $input Optional new guidelines to set.
-     * @return array Current guidelines.
-     */
-    public static function economicGuidelines(array $input): array
-    {
-        if (!self::is_hp_rw_available()) {
-            return self::hp_rw_not_available();
-        }
-
-        // If settings provided, update them
-        if (!empty($input['settings'])) {
-            \HP_RW\Services\EconomicsService::updateGuidelines($input['settings']);
-        }
-
-        return [
-            'success' => true,
-            'guidelines' => \HP_RW\Services\EconomicsService::getGuidelines(),
-        ];
-    }
-
-    // ==========================================================================
-    // SEO & ANALYTICS ABILITIES
-    // ==========================================================================
-
-    /**
-     * Get funnel price range (min/max).
-     *
-     * @param array $input Input with 'funnel_slug' or 'offer_id'.
-     * @return array Price range data.
-     */
-    public static function getPriceRange(array $input): array
-    {
-        if (!self::is_hp_rw_available()) {
-            return self::hp_rw_not_available();
-        }
-
-        $slug = sanitize_text_field($input['funnel_slug'] ?? '');
+        $restored = \HP_RW\Services\FunnelVersionControl::restoreVersion($postId, $versionId);
         
-        if (empty($slug)) {
-            return ['success' => false, 'error' => 'funnel_slug is required'];
-        }
-
-        $postId = self::findFunnelBySlug($slug);
-        if (!$postId) {
-            return ['success' => false, 'error' => 'Funnel not found'];
-        }
-
-        // Get stored values (calculated on save)
-        $minPrice = get_post_meta($postId, 'funnel_min_price', true);
-        $maxPrice = get_post_meta($postId, 'funnel_max_price', true);
-        $brand = get_post_meta($postId, 'funnel_brand', true);
-        $availability = get_post_meta($postId, 'funnel_availability', true);
-
-        // If not calculated yet, calculate now
-        if (empty($minPrice) && class_exists('\HP_RW\Services\FunnelSeoService')) {
-            $range = \HP_RW\Services\FunnelSeoService::calculateFunnelPriceRange($postId);
-            $minPrice = $range['min'];
-            $maxPrice = $range['max'];
+        if (is_wp_error($restored)) {
+            return ['success' => false, 'error' => $restored->get_error_message()];
         }
 
         return [
             'success' => true,
-            'funnel_slug' => $slug,
-            'price_range' => [
-                'min' => (float) $minPrice,
-                'max' => (float) $maxPrice,
-                'currency' => get_woocommerce_currency(),
-                'display' => class_exists('\HP_RW\Services\FunnelSeoService') 
-                    ? \HP_RW\Services\FunnelSeoService::getPriceRangeDisplay($postId)
-                    : '',
-            ],
-            'brand' => $brand ?: 'HolisticPeople',
-            'availability' => $availability ?: 'InStock',
+            'message' => 'Version restored successfully',
         ];
     }
 
     /**
-     * Get full JSON-LD schema for a funnel.
+     * Validate a funnel JSON object.
      *
-     * @param array $input Input with 'funnel_slug'.
-     * @return array Schema data.
+     * @param mixed $input JSON data.
+     * @return array Result.
      */
-    public static function getFunnelSchema(array $input): array
+    public static function validateFunnel($input): array
     {
         if (!self::is_hp_rw_available()) {
             return self::hp_rw_not_available();
         }
 
-        $slug = sanitize_text_field($input['funnel_slug'] ?? '');
+        $input = self::ensureArrayRecursive($input);
+        $valid = \HP_RW\Services\FunnelSchema::validate($input);
         
-        if (empty($slug)) {
-            return ['success' => false, 'error' => 'funnel_slug is required'];
-        }
-
-        $postId = self::findFunnelBySlug($slug);
-        if (!$postId) {
-            return ['success' => false, 'error' => 'Funnel not found'];
-        }
-
-        // Temporarily set global post for schema generation
-        global $post;
-        $originalPost = $post;
-        $post = get_post($postId);
-        setup_postdata($post);
-
-        // Generate schema
-        $schema = [];
-        if (class_exists('\HP_RW\Services\FunnelSeoService')) {
-            $schema = \HP_RW\Services\FunnelSeoService::generateProductSchema();
-        }
-
-        // Restore original post
-        $post = $originalPost;
-        if ($post) {
-            setup_postdata($post);
-        }
-        wp_reset_postdata();
-
         return [
-            'success' => true,
-            'funnel_slug' => $slug,
-            'schema' => $schema,
-            'schema_json' => wp_json_encode($schema, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
-        ];
-    }
-
-    /**
-     * Get canonical status for products and categories.
-     * Lists which products/categories have funnel overrides.
-     *
-     * @param array $input Optional filters.
-     * @return array Canonical override status.
-     */
-    public static function getCanonicalStatus(array $input): array
-    {
-        if (!self::is_hp_rw_available()) {
-            return self::hp_rw_not_available();
-        }
-
-        $result = [
-            'products' => [],
-            'categories' => [],
-        ];
-
-        // Get products with funnel overrides
-        $products = get_posts([
-            'post_type' => 'product',
-            'post_status' => 'publish',
-            'posts_per_page' => -1,
-            'meta_query' => [
-                [
-                    'key' => 'product_funnel_override',
-                    'compare' => 'EXISTS',
-                ],
-                [
-                    'key' => 'product_funnel_override',
-                    'value' => '',
-                    'compare' => '!=',
-                ],
-            ],
-        ]);
-
-        foreach ($products as $product) {
-            $funnelId = get_field('product_funnel_override', $product->ID);
-            if ($funnelId) {
-                $funnel = get_post($funnelId);
-                $funnelSlug = get_post_meta($funnelId, 'funnel_slug', true) ?: ($funnel ? $funnel->post_name : '');
-                
-                $result['products'][] = [
-                    'product_id' => $product->ID,
-                    'product_name' => $product->post_title,
-                    'product_sku' => get_post_meta($product->ID, '_sku', true),
-                    'funnel_id' => $funnelId,
-                    'funnel_slug' => $funnelSlug,
-                    'funnel_name' => $funnel ? $funnel->post_title : '',
-                    'canonical_url' => $funnel ? get_permalink($funnelId) : '',
-                ];
-            }
-        }
-
-        // Get categories with funnel overrides
-        $categories = get_terms([
-            'taxonomy' => 'product_cat',
-            'hide_empty' => false,
-            'meta_query' => [
-                [
-                    'key' => 'category_canonical_funnel',
-                    'compare' => 'EXISTS',
-                ],
-            ],
-        ]);
-
-        if (!is_wp_error($categories)) {
-            foreach ($categories as $category) {
-                $funnelId = get_field('category_canonical_funnel', 'product_cat_' . $category->term_id);
-                if ($funnelId) {
-                    $funnel = get_post($funnelId);
-                    $funnelSlug = get_post_meta($funnelId, 'funnel_slug', true) ?: ($funnel ? $funnel->post_name : '');
-                    
-                    $result['categories'][] = [
-                        'category_id' => $category->term_id,
-                        'category_name' => $category->name,
-                        'category_slug' => $category->slug,
-                        'funnel_id' => $funnelId,
-                        'funnel_slug' => $funnelSlug,
-                        'funnel_name' => $funnel ? $funnel->post_title : '',
-                        'canonical_url' => $funnel ? get_permalink($funnelId) : '',
-                    ];
-                }
-            }
-        }
-
-        return [
-            'success' => true,
-            'product_overrides' => count($result['products']),
-            'category_overrides' => count($result['categories']),
-            'data' => $result,
+            'valid' => empty($valid['errors']),
+            'errors' => $valid['errors'] ?? [],
         ];
     }
 
     /**
      * Run an SEO audit on a funnel.
      * 
-     * @param array $input Input parameters:
+     * @param mixed $input Input parameters:
      *                     - slug (string) Funnel slug
      *                     - data (array) Optional: Fresh funnel data to audit before saving
      * @return array Audit results.
      */
-    public static function seoAudit(array $input): array
+    public static function seoAudit($input): array
     {
         if (!self::is_hp_rw_available()) {
             return self::hp_rw_not_available();
         }
 
+        $input = self::ensureArrayRecursive($input);
         $slug = $input['slug'] ?? '';
         $data = $input['data'] ?? [];
 
@@ -865,17 +428,18 @@ class FunnelApi
      * Accepts a map of fields to update, creates a backup version,
      * updates the meta, and clears the cache.
      * 
-     * @param array $input Input parameters:
+     * @param mixed $input Input parameters:
      *                     - slug (string) Funnel slug
      *                     - fixes (array) Map of field names to values (e.g. ['focus_keyword' => 'Liver Detox'])
      * @return array Result of the operation.
      */
-    public static function applySeoFixes(array $input): array
+    public static function applySeoFixes($input): array
     {
         if (!self::is_hp_rw_available()) {
             return self::hp_rw_not_available();
         }
 
+        $input = self::ensureArrayRecursive($input);
         $slug = sanitize_text_field($input['slug'] ?? '');
         $fixes = $input['fixes'] ?? [];
 
@@ -917,46 +481,341 @@ class FunnelApi
             
             // Special handling for HTML fields
             if ($key === 'authority_bio') {
-                $value = wp_kses_post($value);
-            } else {
-                $value = is_string($value) ? sanitize_text_field($value) : $value;
-            }
-            
-            if (function_exists('update_field')) {
-                update_field($acfKey, $value, $postId);
+                update_post_meta($postId, $acfKey, wp_kses_post($value));
                 $updated[] = $key;
-            } else {
-                update_post_meta($postId, $acfKey, $value);
-                $updated[] = $key . ' (post_meta)';
+                continue;
             }
+
+            // Standard text fields
+            update_post_meta($postId, $acfKey, sanitize_text_field($value));
+            $updated[] = $key;
         }
 
-        // 2. Clear cache
+        // 2. Clear funnel cache
         if (class_exists('\HP_RW\Services\FunnelConfigLoader')) {
             \HP_RW\Services\FunnelConfigLoader::clearCache($postId);
         }
 
-        // 3. Log activity
-        if (class_exists('\HP_RW\Admin\AiActivityLog')) {
-            \HP_RW\Admin\AiActivityLog::logActivity(
-                $postId,
-                $slug,
-                'Applied SEO fixes: ' . implode(', ', $updated),
-                'seo_fixed'
-            );
+        return [
+            'success' => true,
+            'updated_fields' => $updated,
+        ];
+    }
+
+    /**
+     * Search WooCommerce products with filters.
+     *
+     * @param mixed $input Search parameters.
+     * @return array Search results.
+     */
+    public static function searchProducts($input): array
+    {
+        if (!self::is_hp_rw_available()) {
+            return self::hp_rw_not_available();
+        }
+
+        $input = self::ensureArrayRecursive($input);
+        $category = sanitize_text_field($input['category'] ?? '');
+        $search = sanitize_text_field($input['search'] ?? '');
+        $limit = (int)($input['limit'] ?? 20);
+
+        if (!class_exists('\HP_RW\Services\ProductCatalogService')) {
+            return ['success' => false, 'error' => 'Product catalog service not available'];
+        }
+
+        $products = \HP_RW\Services\ProductCatalogService::search($search, $category, $limit);
+
+        return [
+            'success' => true,
+            'count' => count($products),
+            'products' => $products,
+        ];
+    }
+
+    /**
+     * Get product details by SKU.
+     *
+     * @param mixed $input Input with 'sku'.
+     * @return array Product data.
+     */
+    public static function getProduct($input): array
+    {
+        if (!self::is_hp_rw_available()) {
+            return self::hp_rw_not_available();
+        }
+
+        $input = self::ensureArrayRecursive($input);
+        $sku = sanitize_text_field($input['sku'] ?? '');
+        if (empty($sku)) {
+            return ['success' => false, 'error' => 'SKU is required'];
+        }
+
+        if (!class_exists('\HP_RW\Services\ProductCatalogService')) {
+            return ['success' => false, 'error' => 'Product catalog service not available'];
+        }
+
+        $product = \HP_RW\Services\ProductCatalogService::getBySku($sku);
+        if (!$product) {
+            return ['success' => false, 'error' => "Product with SKU '$sku' not found"];
         }
 
         return [
             'success' => true,
-            'message' => 'SEO fixes applied successfully.',
-            'updated_fields' => $updated,
-            'post_id' => $postId,
+            'product' => $product,
         ];
     }
 
-    // ==========================================================================
-    // HELPER METHODS
-    // ==========================================================================
+    /**
+     * Calculate supply for a product.
+     *
+     * @param mixed $input Array with 'sku', 'days', 'servings_per_day'.
+     * @return array Supply calculation.
+     */
+    public static function calculateSupply($input): array
+    {
+        if (!self::is_hp_rw_available()) {
+            return self::hp_rw_not_available();
+        }
+
+        $input = self::ensureArrayRecursive($input);
+        $sku = sanitize_text_field($input['sku'] ?? '');
+        $days = (int)($input['days'] ?? 30);
+        $servingsPerDay = (int)($input['servings_per_day'] ?? 1);
+
+        if (empty($sku)) {
+            return ['success' => false, 'error' => 'SKU is required'];
+        }
+
+        if (!class_exists('\HP_RW\Services\ProductCatalogService')) {
+            return ['success' => false, 'error' => 'Product catalog service not available'];
+        }
+
+        $supply = \HP_RW\Services\ProductCatalogService::calculateSupply($sku, $days, $servingsPerDay);
+
+        return [
+            'success' => true,
+            'calculation' => $supply,
+        ];
+    }
+
+    /**
+     * Build a product kit from protocol.
+     *
+     * @param mixed $input Array with 'supplements' and 'duration_days'.
+     * @return array Built kit.
+     */
+    public static function buildKit($input): array
+    {
+        if (!self::is_hp_rw_available()) {
+            return self::hp_rw_not_available();
+        }
+
+        $input = self::ensureArrayRecursive($input);
+        $supplements = $input['supplements'] ?? [];
+        $durationDays = (int)($input['duration_days'] ?? 30);
+
+        if (empty($supplements)) {
+            return ['success' => false, 'error' => 'Supplements array is required'];
+        }
+
+        if (!class_exists('\HP_RW\Services\ProtocolKitBuilder')) {
+            return ['success' => false, 'error' => 'Protocol kit builder service not available'];
+        }
+
+        $kit = \HP_RW\Services\ProtocolKitBuilder::buildFromProtocol($supplements, $durationDays);
+
+        return [
+            'success' => true,
+            'kit' => $kit,
+        ];
+    }
+
+    /**
+     * Calculate economics for an offer.
+     *
+     * @param mixed $input Array with 'items', 'price', 'shipping_scenario'.
+     * @return array Economics results.
+     */
+    public static function calculateEconomics($input): array
+    {
+        if (!self::is_hp_rw_available()) {
+            return self::hp_rw_not_available();
+        }
+
+        $input = self::ensureArrayRecursive($input);
+        $items = $input['items'] ?? [];
+        $price = (float)($input['price'] ?? 0);
+        $shippingScenario = sanitize_text_field($input['shipping_scenario'] ?? 'domestic');
+
+        if (empty($items)) {
+            return ['success' => false, 'error' => 'Items array is required'];
+        }
+
+        if (!class_exists('\HP_RW\Services\EconomicsService')) {
+            return ['success' => false, 'error' => 'Economics service not available'];
+        }
+
+        $economics = \HP_RW\Services\EconomicsService::calculateOfferProfitability($items, $price, $shippingScenario);
+
+        return [
+            'success' => true,
+            'economics' => $economics,
+        ];
+    }
+
+    /**
+     * Validate economics against guidelines.
+     *
+     * @param mixed $input Same as calculateEconomics.
+     * @return array Validation result.
+     */
+    public static function validateEconomics($input): array
+    {
+        if (!self::is_hp_rw_available()) {
+            return self::hp_rw_not_available();
+        }
+
+        $input = self::ensureArrayRecursive($input);
+        $items = $input['items'] ?? [];
+        $price = (float)($input['price'] ?? 0);
+        $shippingScenario = sanitize_text_field($input['shipping_scenario'] ?? 'domestic');
+
+        if (empty($items)) {
+            return ['success' => false, 'error' => 'Items array is required'];
+        }
+
+        if (!class_exists('\HP_RW\Services\EconomicsService')) {
+            return ['success' => false, 'error' => 'Economics service not available'];
+        }
+
+        $validation = \HP_RW\Services\EconomicsService::validateOffer($items, $price, $shippingScenario);
+
+        return [
+            'success' => true,
+            'validation' => $validation,
+        ];
+    }
+
+    /**
+     * Get or set economic guidelines.
+     *
+     * @param mixed $input Optional 'settings' to update.
+     * @return array Current guidelines.
+     */
+    public static function economicGuidelines($input): array
+    {
+        if (!self::is_hp_rw_available()) {
+            return self::hp_rw_not_available();
+        }
+
+        $input = self::ensureArrayRecursive($input);
+        $settings = $input['settings'] ?? null;
+
+        if (!class_exists('\HP_RW\Services\EconomicsService')) {
+            return ['success' => false, 'error' => 'Economics service not available'];
+        }
+
+        if ($settings) {
+            \HP_RW\Services\EconomicsService::updateGuidelines($settings);
+        }
+
+        return [
+            'success' => true,
+            'guidelines' => \HP_RW\Services\EconomicsService::getGuidelines(),
+        ];
+    }
+
+    /**
+     * Get SEO schema for a funnel.
+     *
+     * @param mixed $input Array with 'funnel_slug'.
+     * @return array Result.
+     */
+    public static function getSeoSchema($input): array
+    {
+        if (!self::is_hp_rw_available()) {
+            return self::hp_rw_not_available();
+        }
+
+        $input = self::ensureArrayRecursive($input);
+        $slug = sanitize_text_field($input['funnel_slug'] ?? '');
+        if (empty($slug)) {
+            return ['success' => false, 'error' => 'funnel_slug is required'];
+        }
+
+        $postId = self::findFunnelBySlug($slug);
+        if (!$postId) {
+            return ['success' => false, 'error' => "Funnel '$slug' not found"];
+        }
+
+        if (!class_exists('\HP_RW\Services\FunnelSeoService')) {
+            return ['success' => false, 'error' => 'SEO service not available'];
+        }
+
+        $schema = \HP_RW\Services\FunnelSeoService::getProductSchema($postId);
+        
+        return [
+            'success' => true,
+            'schema' => $schema,
+        ];
+    }
+
+    /**
+     * Get price range for a funnel.
+     *
+     * @param mixed $input Array with 'funnel_slug'.
+     * @return array Result.
+     */
+    public static function getPriceRange($input): array
+    {
+        if (!self::is_hp_rw_available()) {
+            return self::hp_rw_not_available();
+        }
+
+        $input = self::ensureArrayRecursive($input);
+        $slug = sanitize_text_field($input['funnel_slug'] ?? '');
+        if (empty($slug)) {
+            return ['success' => false, 'error' => 'funnel_slug is required'];
+        }
+
+        $postId = self::findFunnelBySlug($slug);
+        if (!$postId) {
+            return ['success' => false, 'error' => "Funnel '$slug' not found"];
+        }
+
+        $minPrice = (float)get_post_meta($postId, '_hp_funnel_min_price', true);
+        $maxPrice = (float)get_post_meta($postId, '_hp_funnel_max_price', true);
+        $currency = get_woocommerce_currency();
+
+        return [
+            'success' => true,
+            'min_price' => $minPrice,
+            'max_price' => $maxPrice,
+            'currency' => $currency,
+        ];
+    }
+
+    /**
+     * Get canonical status for funnels.
+     *
+     * @param mixed $input Optional params.
+     * @return array Result.
+     */
+    public static function getCanonicalStatus($input): array
+    {
+        if (!self::is_hp_rw_available()) {
+            return self::hp_rw_not_available();
+        }
+
+        if (!class_exists('\HP_RW\Services\FunnelSeoService')) {
+            return ['success' => false, 'error' => 'SEO service not available'];
+        }
+
+        return [
+            'success' => true,
+            'overrides' => \HP_RW\Services\FunnelSeoService::getCanonicalOverrides(),
+        ];
+    }
 
     /**
      * Find funnel post ID by slug.
@@ -992,5 +851,24 @@ class FunnelApi
         ]);
 
         return !empty($posts) ? $posts[0]->ID : null;
+    }
+
+    /**
+     * Deeply convert objects to arrays.
+     * 
+     * @param mixed $value Value to convert
+     * @return mixed Converted value
+     */
+    private static function ensureArrayRecursive($value)
+    {
+        if (is_object($value)) {
+            $value = (array) $value;
+        }
+        if (is_array($value)) {
+            foreach ($value as $k => $v) {
+                $value[$k] = self::ensureArrayRecursive($v);
+            }
+        }
+        return $value;
     }
 }
