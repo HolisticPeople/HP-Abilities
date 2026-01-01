@@ -27,6 +27,10 @@ try {
     $res = \HP_Abilities\Abilities\FunnelApi::getFunnel(['slug' => $slug]);
     echo "   Success: " . ($res['success'] ? 'YES' : 'NO') . "\n";
     
+    echo "\n3. Calling \HP_Abilities\Abilities\FunnelApi::seoAudit(['slug' => $slug])...\n";
+    $res2 = \HP_Abilities\Abilities\FunnelApi::seoAudit(['slug' => $slug]);
+    echo "   Success: " . ($res2['success'] ? 'YES' : 'NO') . "\n";
+    
     echo "\nSuccess! No stdClass error found in these calls.\n";
 } catch (Throwable $e) {
     echo "\nERROR FOUND:\n";
