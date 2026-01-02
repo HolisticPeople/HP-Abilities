@@ -860,7 +860,7 @@ class Plugin
         ]);
 
         // Bulk SEO fix ability
-        wp_register_ability('hp-funnels/apply-seo-fixes', [
+        wp_register_ability('hp-seo-fix', [
             'label'       => __('Apply Funnel SEO Fixes', 'hp-abilities'),
             'description' => __('Bulk apply SEO fixes to a funnel including metadata and content.', 'hp-abilities'),
             'category'    => 'hp-seo',
