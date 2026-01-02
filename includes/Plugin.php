@@ -1325,6 +1325,7 @@ class Plugin
         ?>
         <div class="wrap">
             <h1><?php echo esc_html__('HP Abilities', 'hp-abilities'); ?></h1>
+            <p><strong><?php echo esc_html__('Plugin Version:', 'hp-abilities'); ?></strong> <?php echo esc_html(defined('HP_ABILITIES_VERSION') ? HP_ABILITIES_VERSION : ''); ?></p>
             
             <div class="card">
                 <h2><?php echo esc_html__('Status', 'hp-abilities'); ?></h2>
