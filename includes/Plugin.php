@@ -119,11 +119,11 @@ class Plugin
             return;
         }
 
-        // Apply SEO fixes - MOVED TO TOP FOR DEBUGGING
-        wp_register_ability('hp-funnels/apply-seo-fixes', [
+        // Apply SEO fixes - MOVED TO TOP AND RENAMED FOR DEBUGGING
+        wp_register_ability('hp-seo/fix', [
             'label'       => __('Apply Funnel SEO Fixes', 'hp-abilities'),
             'description' => __('Apply SEO fixes to a funnel. Pass field names directly (focus_keyword, meta_title, etc.).', 'hp-abilities'),
-            'category'    => 'hp-funnels',
+            'category'    => 'hp-seo',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
