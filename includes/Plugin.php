@@ -895,7 +895,7 @@ class Plugin
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'applySeoFixes'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
+            'meta' => ['show_in_rest' => true, 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
     }
 
