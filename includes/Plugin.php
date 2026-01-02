@@ -264,7 +264,18 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => (object) [],
+                'properties' => [
+                    'slug' => [
+                        'type' => 'string',
+                        'description' => 'Funnel slug to update',
+                    ],
+                    'data' => [
+                        'type' => 'object',
+                        'description' => 'Funnel data object with sections to update',
+                        'additionalProperties' => true,
+                    ],
+                ],
+                'required' => ['slug', 'data'],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -284,7 +295,18 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => (object) [],
+                'properties' => [
+                    'slug' => [
+                        'type' => 'string',
+                        'description' => 'Funnel slug to update',
+                    ],
+                    'sections' => [
+                        'type' => 'object',
+                        'description' => 'Object with section names as keys and section data as values',
+                        'additionalProperties' => true,
+                    ],
+                ],
+                'required' => ['slug', 'sections'],
             ],
             'output_schema' => [
                 'type' => 'object',
