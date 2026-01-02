@@ -459,7 +459,7 @@ class Plugin
             'meta' => ['show_in_rest' => true, 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
-        wp_register_ability('hp-seo-fix', [
+        wp_register_ability('hp-funnels/apply-seo-fixes', [
             'label'       => __('Apply Funnel SEO Fixes', 'hp-abilities'),
             'description' => __('Apply SEO fixes to a funnel. Pass field names directly (focus_keyword, meta_title, etc.).', 'hp-abilities'),
             'category'    => 'hp-funnels',
