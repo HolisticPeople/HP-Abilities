@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       HP Abilities
  * Description:       Exposes WooCommerce capabilities via the WordPress Abilities API for AI agent integrations.
- * Version:           0.5.23
+ * Version:           0.5.24
  * Requires at least: 6.9
  * Requires PHP:      7.4
  * Author:            Holistic People
