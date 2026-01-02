@@ -29,6 +29,7 @@ class Plugin
 
         // Temporary MCP debug logging to capture JSON/validation issues
         add_filter('rest_request_before_callbacks', [self::class, 'log_mcp_requests'], 1, 3);
+        add_action('rest_api_init', [self::class, 'log_mcp_raw_request'], 0);
 
         // ALWAYS register REST API endpoints for internal tools (like manual SEO audit)
         add_action('rest_api_init', [self::class, 'register_rest_routes']);
@@ -77,6 +78,33 @@ class Plugin
             ' decoded=' . json_encode($decoded));
 
         return $response;
+    }
+
+    /**
+     * Log raw body and JSON error early in the REST lifecycle for MCP endpoints.
+     */
+    public static function log_mcp_raw_request()
+    {
+        $uri = $_SERVER['REQUEST_URI'] ?? '';
+        if (strpos($uri, '/woocommerce/mcp') === false) {
+            return;
+        }
+
+        $rawBody = file_get_contents('php://input');
+        $decoded = json_decode($rawBody, true);
+        $jsonError = json_last_error();
+        $jsonErrorMsg = json_last_error_msg();
+
+        // Avoid logging secrets
+        $headers = array_change_key_case(apache_request_headers() ?: []);
+        unset($headers['x-mcp-api-key'], $headers['authorization']);
+
+        error_log('[MCP-DEBUG-RAW] uri=' . $uri .
+            ' method=' . ($_SERVER['REQUEST_METHOD'] ?? '') .
+            ' json_error=' . $jsonError . ' (' . $jsonErrorMsg . ')' .
+            ' headers=' . json_encode($headers) .
+            ' body=' . $rawBody .
+            ' decoded=' . json_encode($decoded));
     }
 
     /**
