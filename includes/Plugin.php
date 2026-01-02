@@ -27,6 +27,9 @@ class Plugin
         // Hook into WooCommerce MCP to include HP abilities
         add_filter('woocommerce_mcp_include_ability', [self::class, 'include_hp_abilities_in_wc_mcp'], 10, 2);
 
+        // Temporary MCP debug logging to capture JSON/validation issues
+        add_filter('rest_request_before_callbacks', [self::class, 'log_mcp_requests'], 1, 3);
+
         // ALWAYS register REST API endpoints for internal tools (like manual SEO audit)
         add_action('rest_api_init', [self::class, 'register_rest_routes']);
     }
@@ -45,6 +48,35 @@ class Plugin
             return true;
         }
         return $include;
+    }
+
+    /**
+     * Log incoming MCP REST requests for debugging validation failures.
+     */
+    public static function log_mcp_requests($response, $handler, $request)
+    {
+        $route = $request->get_route();
+        if (strpos($route, '/woocommerce/mcp') === false) {
+            return $response;
+        }
+
+        // Avoid logging secrets
+        $headers = $request->get_headers();
+        unset($headers['x-mcp-api-key'], $headers['authorization']);
+
+        $body = $request->get_body();
+        $decoded = json_decode($body, true);
+        $jsonError = json_last_error();
+        $jsonErrorMsg = json_last_error_msg();
+
+        error_log('[MCP-DEBUG] route=' . $route .
+            ' method=' . $request->get_method() .
+            ' json_error=' . $jsonError . ' (' . $jsonErrorMsg . ')' .
+            ' headers=' . json_encode($headers) .
+            ' body=' . $body .
+            ' decoded=' . json_encode($decoded));
+
+        return $response;
     }
 
     /**
