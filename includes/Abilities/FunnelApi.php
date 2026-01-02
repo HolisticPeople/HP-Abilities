@@ -1,6 +1,6 @@
 <?php
 /**
- * FINAL FORCED UPDATE: v0.5.37
+ * FORCED UPDATE: v0.5.38
  */
 namespace HP_Abilities\Abilities;
 
@@ -140,7 +140,7 @@ class FunnelApi
             return ['success' => false, 'error' => "Funnel with slug '$slug' not found."];
         }
 
-        $funnel = \HP_RW\Services\FunnelConfigLoader::loadFunnel($postId);
+        $funnel = \HP_RW\Services\FunnelConfigLoader::getById($postId);
         $funnel = self::ensureArrayRecursive($funnel);
 
         return [
@@ -159,16 +159,15 @@ class FunnelApi
         }
 
         $input = self::ensureArrayRecursive($input);
-        $postId = \HP_RW\Services\FunnelConfigLoader::createFunnel($input);
-        if (is_wp_error($postId)) {
-            return ['success' => false, 'error' => $postId->get_error_message()];
+        $result = \HP_RW\Services\FunnelImporter::importFunnel($input, 'create_new');
+        if (!$result['success']) {
+            return ['success' => false, 'error' => $result['error'] ?? 'Failed to create funnel'];
         }
 
-        $post = get_post($postId);
         return [
             'success' => true,
-            'post_id' => $postId,
-            'slug'    => $post->post_name,
+            'post_id' => $result['post_id'],
+            'slug'    => $result['slug'],
         ];
     }
 
@@ -197,7 +196,7 @@ class FunnelApi
             return ['success' => false, 'error' => "Funnel with slug '$slug' not found."];
         }
 
-        $result = \HP_RW\Services\FunnelConfigLoader::updateFunnel($postId, $data);
+        $result = \HP_RW\Services\FunnelConfigLoader::updateFunnel($slug, $data);
         if (is_wp_error($result)) {
             return ['success' => false, 'error' => $result->get_error_message()];
         }
@@ -233,17 +232,14 @@ class FunnelApi
             return ['success' => false, 'error' => "Funnel with slug '$slug' not found."];
         }
 
-        $updated = [];
-        foreach ($sections as $sectionName => $sectionData) {
-            $result = \HP_RW\Services\FunnelConfigLoader::updateSection($postId, $sectionName, $sectionData);
-            if (!is_wp_error($result)) {
-                $updated[] = $sectionName;
-            }
+        $result = \HP_RW\Services\FunnelConfigLoader::updateSections($slug, $sections);
+        if (is_wp_error($result)) {
+            return ['success' => false, 'error' => $result->get_error_message()];
         }
 
         return [
             'success' => true,
-            'updated_sections' => $updated,
+            'updated_sections' => $result['updated_sections'] ?? array_keys($sections),
         ];
     }
 
@@ -351,30 +347,47 @@ class FunnelApi
             return self::hp_rw_not_available();
         }
 
-        $input = self::ensureArrayRecursive($input);
-        $slug = sanitize_text_field($input['slug'] ?? '');
-        $data = $input['data'] ?? null;
+        try {
+            $input = self::ensureArrayRecursive($input);
+            $slug = sanitize_text_field($input['slug'] ?? '');
+            $data = $input['data'] ?? null;
 
-        if (empty($slug) && empty($data)) {
-            return ['success' => false, 'error' => 'Either slug or data must be provided for audit.'];
-        }
-
-        if ($slug && empty($data)) {
-            $postId = self::findFunnelBySlug($slug);
-            if (!$postId) {
-                return ['success' => false, 'error' => "Funnel with slug '$slug' not found."];
+            if (empty($slug) && empty($data)) {
+                return ['success' => false, 'error' => 'Either slug or data must be provided for audit.'];
             }
-            $data = \HP_RW\Services\FunnelConfigLoader::loadFunnel($postId);
-        }
 
-        if (class_exists('\HP_RW\Services\FunnelSeoService')) {
-            return [
-                'success' => true,
-                'data'    => \HP_RW\Services\FunnelSeoService::runAudit($data),
-            ];
-        }
+            if ($slug && empty($data)) {
+                $postId = self::findFunnelBySlug($slug);
+                if (!$postId) {
+                    return ['success' => false, 'error' => "Funnel with slug '$slug' not found."];
+                }
+                $data = \HP_RW\Services\FunnelConfigLoader::getById($postId);
+            }
 
-        return ['success' => false, 'error' => 'FunnelSeoService not found.'];
+            // Ensure data is a plain array
+            $data = self::ensureArrayRecursive($data);
+
+            if (class_exists('\HP_RW\Services\FunnelSeoAuditor')) {
+                $audit = \HP_RW\Services\FunnelSeoAuditor::audit($data);
+                return [
+                    'success' => true,
+                    'data'    => $audit,
+                ];
+            }
+
+            if (class_exists('\HP_RW\Services\FunnelSeoService')) {
+                $audit = \HP_RW\Services\FunnelSeoService::runAudit($data);
+                return [
+                    'success' => true,
+                    'data'    => $audit,
+                ];
+            }
+
+            return ['success' => false, 'error' => 'FunnelSeoAuditor/FunnelSeoService not found.'];
+        } catch (\Throwable $e) {
+            error_log('[HP-Abilities] seoAudit error: ' . $e->getMessage());
+            return ['success' => false, 'error' => 'seoAudit failed: ' . $e->getMessage()];
+        }
     }
 
     /**
@@ -707,4 +720,3 @@ class FunnelApi
         return $value;
     }
 }
-
