@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * FORCED UPDATE: v0.5.38
  */
@@ -23,7 +23,7 @@ class FunnelApi
      */
     private static function is_hp_rw_available(): bool
     {
-        return class_exists('\HP_RW\Services\FunnelConfigLoader');
+        $loader = class_exists('\HP_RW\Services\FunnelConfigLoader'); error_log('[HP-Abilities] is_hp_rw_available: FunnelConfigLoader=' . ($loader ? 'YES' : 'NO')); return $loader;
     }
 
     /**
@@ -33,6 +33,7 @@ class FunnelApi
      */
     private static function hp_rw_not_available(): array
     {
+        error_log('[HP-Abilities] hp_rw_not_available: HP-React-Widgets not loaded');
         return [
             'success' => false,
             'error'   => 'HP-React-Widgets plugin is not active.',
