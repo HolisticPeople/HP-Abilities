@@ -119,6 +119,39 @@ class Plugin
             return;
         }
 
+        // Apply SEO fixes - MOVED TO TOP FOR DEBUGGING
+        wp_register_ability('hp-funnels/apply-seo-fixes', [
+            'label'       => __('Apply Funnel SEO Fixes', 'hp-abilities'),
+            'description' => __('Apply SEO fixes to a funnel. Pass field names directly (focus_keyword, meta_title, etc.).', 'hp-abilities'),
+            'category'    => 'hp-funnels',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'slug' => ['type' => 'string', 'description' => 'Funnel slug'],
+                    'focus_keyword' => ['type' => 'string'],
+                    'meta_title' => ['type' => 'string'],
+                    'meta_description' => ['type' => 'string'],
+                    'hero_image_alt' => ['type' => 'string'],
+                    'authority_image_alt' => ['type' => 'string'],
+                    'authority_bio' => ['type' => 'string', 'description' => 'HTML content for bio'],
+                ],
+                'required' => ['slug'],
+            ],
+            'output_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'success' => ['type' => 'boolean'],
+                    'data' => [
+                        'type' => 'object',
+                        'additionalProperties' => true,
+                    ],
+                ],
+            ],
+            'execute_callback'    => [Abilities\FunnelApi::class, 'applySeoFixes'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'meta' => ['show_in_rest' => true, 'mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+
         // System & Schema abilities
         wp_register_ability('hp-funnels/explain-system', [
             'label'       => __('Explain Funnel System', 'hp-abilities'),
@@ -455,38 +488,6 @@ class Plugin
                 ],
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'seoAudit'],
-            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'mcp' => ['public' => true, 'type' => 'tool']],
-        ]);
-
-        wp_register_ability('hp-funnels/apply-seo-fixes', [
-            'label'       => __('Apply Funnel SEO Fixes', 'hp-abilities'),
-            'description' => __('Apply SEO fixes to a funnel. Pass field names directly (focus_keyword, meta_title, etc.).', 'hp-abilities'),
-            'category'    => 'hp-funnels',
-            'input_schema' => [
-                'type' => 'object',
-                'properties' => [
-                    'slug' => ['type' => 'string', 'description' => 'Funnel slug'],
-                    'focus_keyword' => ['type' => 'string'],
-                    'meta_title' => ['type' => 'string'],
-                    'meta_description' => ['type' => 'string'],
-                    'hero_image_alt' => ['type' => 'string'],
-                    'authority_image_alt' => ['type' => 'string'],
-                    'authority_bio' => ['type' => 'string', 'description' => 'HTML content for bio'],
-                ],
-                'required' => ['slug'],
-            ],
-            'output_schema' => [
-                'type' => 'object',
-                'properties' => [
-                    'success' => ['type' => 'boolean'],
-                    'data' => [
-                        'type' => 'object',
-                        'additionalProperties' => true,
-                    ],
-                ],
-            ],
-            'execute_callback'    => [Abilities\FunnelApi::class, 'applySeoFixes'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
             'meta' => ['show_in_rest' => true, 'mcp' => ['public' => true, 'type' => 'tool']],
         ]);
