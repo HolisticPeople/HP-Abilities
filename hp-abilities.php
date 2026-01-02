@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('HP_ABILITIES_VERSION', '0.5.23');
+define('HP_ABILITIES_VERSION', '0.5.24');
 define('HP_ABILITIES_FILE', __FILE__);
 define('HP_ABILITIES_PATH', plugin_dir_path(__FILE__));
 define('HP_ABILITIES_URL', plugin_dir_url(__FILE__));

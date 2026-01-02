@@ -461,26 +461,20 @@ class Plugin
 
         wp_register_ability('hp-seo-fix', [
             'label'       => __('Apply Funnel SEO Fixes', 'hp-abilities'),
-            'description' => __('Bulk apply SEO fixes to a funnel including metadata and content.', 'hp-abilities'),
+            'description' => __('Apply SEO fixes to a funnel. Pass field names directly (focus_keyword, meta_title, etc.).', 'hp-abilities'),
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
                     'slug' => ['type' => 'string', 'description' => 'Funnel slug'],
-                    'fixes' => [
-                        'type' => 'object',
-                        'description' => 'Map of fields to update (focus_keyword, meta_title, meta_description, etc.)',
-                        'properties' => [
-                            'focus_keyword' => ['type' => 'string'],
-                            'meta_title' => ['type' => 'string'],
-                            'meta_description' => ['type' => 'string'],
-                            'hero_image_alt' => ['type' => 'string'],
-                            'authority_image_alt' => ['type' => 'string'],
-                            'authority_bio' => ['type' => 'string', 'description' => 'HTML content for bio'],
-                        ],
-                    ],
+                    'focus_keyword' => ['type' => 'string'],
+                    'meta_title' => ['type' => 'string'],
+                    'meta_description' => ['type' => 'string'],
+                    'hero_image_alt' => ['type' => 'string'],
+                    'authority_image_alt' => ['type' => 'string'],
+                    'authority_bio' => ['type' => 'string', 'description' => 'HTML content for bio'],
                 ],
-                'required' => ['slug', 'fixes'],
+                'required' => ['slug'],
             ],
             'output_schema' => [
                 'type' => 'object',
