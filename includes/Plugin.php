@@ -887,8 +887,10 @@ class Plugin
                 'type' => 'object',
                 'properties' => [
                     'success' => ['type' => 'boolean'],
-                    'message' => ['type' => 'string'],
-                    'updated_fields' => ['type' => 'array', 'items' => ['type' => 'string']],
+                    'data' => [
+                        'type' => 'object',
+                        'additionalProperties' => true,
+                    ],
                 ],
             ],
             'execute_callback'    => [Abilities\FunnelApi::class, 'applySeoFixes'],
