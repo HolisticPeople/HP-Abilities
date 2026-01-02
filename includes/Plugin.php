@@ -135,8 +135,6 @@ class Plugin
                     'authority_image_alt' => ['type' => 'string'],
                     'authority_bio' => ['type' => 'string', 'description' => 'HTML content for bio'],
                 ],
-                'required' => ['slug'],
-                'additionalProperties' => true,
             ],
             'output_schema' => [
                 'type' => 'object',
