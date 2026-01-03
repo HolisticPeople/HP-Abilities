@@ -1275,7 +1275,7 @@ class Plugin
                         <span style="color: green;">✓ <?php echo esc_html__('Available', 'hp-abilities'); ?></span>
                     <?php else: ?>
                         <span style="color: orange;">⚠ <?php echo esc_html__('Not available (requires WordPress 6.9+)', 'hp-abilities'); ?></span>
-                    <? endif; ?>
+                    <?php endif; ?>
                 </p>
                 <p>
                     <strong><?php echo esc_html__('REST API Fallback:', 'hp-abilities'); ?></strong>
