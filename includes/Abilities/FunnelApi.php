@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 namespace HP_Abilities\Abilities;
 
 if (!defined('ABSPATH')) {
