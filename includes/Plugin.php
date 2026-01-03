@@ -27,10 +27,6 @@ class Plugin
         // Hook into WooCommerce MCP to include HP abilities
         add_filter('woocommerce_mcp_include_ability', [self::class, 'include_hp_abilities_in_wc_mcp'], 10, 2);
 
-        // Temporary MCP debug logging to capture JSON/validation issues
-        add_filter('rest_request_before_callbacks', [self::class, 'log_mcp_requests'], 1, 3);
-        add_action('rest_api_init', [self::class, 'log_mcp_raw_request'], 0);
-
         // ALWAYS register REST API endpoints for internal tools (like manual SEO audit)
         add_action('rest_api_init', [self::class, 'register_rest_routes']);
     }
@@ -49,62 +45,6 @@ class Plugin
             return true;
         }
         return $include;
-    }
-
-    /**
-     * Log incoming MCP REST requests for debugging validation failures.
-     */
-    public static function log_mcp_requests($response, $handler, $request)
-    {
-        $route = $request->get_route();
-        if (strpos($route, '/woocommerce/mcp') === false) {
-            return $response;
-        }
-
-        // Avoid logging secrets
-        $headers = $request->get_headers();
-        unset($headers['x-mcp-api-key'], $headers['authorization']);
-
-        $body = $request->get_body();
-        $decoded = json_decode($body, true);
-        $jsonError = json_last_error();
-        $jsonErrorMsg = json_last_error_msg();
-
-        error_log('[MCP-DEBUG] route=' . $route .
-            ' method=' . $request->get_method() .
-            ' json_error=' . $jsonError . ' (' . $jsonErrorMsg . ')' .
-            ' headers=' . json_encode($headers) .
-            ' body=' . $body .
-            ' decoded=' . json_encode($decoded));
-
-        return $response;
-    }
-
-    /**
-     * Log raw body and JSON error early in the REST lifecycle for MCP endpoints.
-     */
-    public static function log_mcp_raw_request()
-    {
-        $uri = $_SERVER['REQUEST_URI'] ?? '';
-        if (strpos($uri, '/woocommerce/mcp') === false) {
-            return;
-        }
-
-        $rawBody = file_get_contents('php://input');
-        $decoded = json_decode($rawBody, true);
-        $jsonError = json_last_error();
-        $jsonErrorMsg = json_last_error_msg();
-
-        // Avoid logging secrets
-        $headers = array_change_key_case(apache_request_headers() ?: []);
-        unset($headers['x-mcp-api-key'], $headers['authorization']);
-
-        error_log('[MCP-DEBUG-RAW] uri=' . $uri .
-            ' method=' . ($_SERVER['REQUEST_METHOD'] ?? '') .
-            ' json_error=' . $jsonError . ' (' . $jsonErrorMsg . ')' .
-            ' headers=' . json_encode($headers) .
-            ' body=' . $rawBody .
-            ' decoded=' . json_encode($decoded));
     }
 
     /**
@@ -137,6 +77,9 @@ class Plugin
 
         // Funnel abilities (requires HP-React-Widgets)
         self::register_funnel_abilities();
+
+        // SEO fixes ability
+        self::register_apply_seo_fixes_ability();
 
         // SEO & Analytics abilities (requires HP-React-Widgets)
         self::register_seo_abilities();
@@ -178,40 +121,6 @@ class Plugin
         if (!function_exists('wp_register_ability')) {
             return;
         }
-
-        // Apply SEO fixes
-        wp_register_ability('hp-funnels/seo-fix', [
-            'label'       => __('Apply Funnel SEO Fixes', 'hp-abilities'),
-            'description' => __('Apply SEO fixes to a funnel. Pass field names directly (focus_keyword, meta_title, etc.).', 'hp-abilities'),
-            'category'    => 'hp-funnels',
-            'input_schema' => [
-                'type' => 'object',
-                'properties' => [
-                    'slug' => ['type' => 'string', 'description' => 'Funnel slug'],
-                    'focus_keyword' => ['type' => 'string'],
-                    'meta_title' => ['type' => 'string'],
-                    'meta_description' => ['type' => 'string'],
-                    'hero_image_alt' => ['type' => 'string'],
-                    'authority_image_alt' => ['type' => 'string'],
-                    'authority_bio' => ['type' => 'string', 'description' => 'HTML content for bio'],
-                ],
-                'required' => ['slug'],
-                'additionalProperties' => true,
-            ],
-            'output_schema' => [
-                'type' => 'object',
-                'properties' => [
-                    'success' => ['type' => 'boolean'],
-                    'data' => [
-                        'type' => 'object',
-                        'additionalProperties' => true,
-                    ],
-                ],
-            ],
-            'execute_callback'    => [Abilities\FunnelApi::class, 'applySeoFixes'],
-            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
-            'meta' => ['show_in_rest' => true, 'mcp' => ['public' => true, 'type' => 'tool']],
-        ]);
 
         // System & Schema abilities
         wp_register_ability('hp-funnels/explain-system', [
@@ -319,7 +228,7 @@ class Plugin
                     'success' => ['type' => 'boolean'],
                     'funnel' => [
                         'type' => 'object',
-                        'additionalProperties' => true,
+                        'properties' => (object) [],
                     ],
                 ],
             ],
@@ -355,18 +264,7 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [
-                    'slug' => [
-                        'type' => 'string',
-                        'description' => 'Funnel slug to update',
-                    ],
-                    'data' => [
-                        'type' => 'object',
-                        'description' => 'Funnel data object with sections to update',
-                        'additionalProperties' => true,
-                    ],
-                ],
-                'required' => ['slug', 'data'],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -386,18 +284,7 @@ class Plugin
             'category'    => 'hp-funnels',
             'input_schema' => [
                 'type' => 'object',
-                'properties' => [
-                    'slug' => [
-                        'type' => 'string',
-                        'description' => 'Funnel slug to update',
-                    ],
-                    'sections' => [
-                        'type' => 'object',
-                        'description' => 'Object with section names as keys and section data as values',
-                        'additionalProperties' => true,
-                    ],
-                ],
-                'required' => ['slug', 'sections'],
+                'properties' => (object) [],
             ],
             'output_schema' => [
                 'type' => 'object',
@@ -544,7 +431,15 @@ class Plugin
                     'success' => ['type' => 'boolean'],
                     'data' => [
                         'type' => 'object',
-                        'additionalProperties' => true,
+                        'properties' => [
+                            'status' => ['type' => 'string'],
+                            'score' => ['type' => 'object'],
+                            'problems' => ['type' => 'array', 'items' => ['type' => 'string']],
+                            'improvements' => ['type' => 'array', 'items' => ['type' => 'string']],
+                            'good' => ['type' => 'array', 'items' => ['type' => 'string']],
+                            'suggestions' => ['type' => 'object', 'properties' => []],
+                            'focus_keyword' => ['type' => 'string'],
+                        ],
                     ],
                 ],
             ],
@@ -955,6 +850,52 @@ class Plugin
     }
 
     /**
+     * Register the bulk SEO fix ability.
+     */
+    private static function register_apply_seo_fixes_ability(): void
+    {
+        if (!function_exists('wp_register_ability')) {
+            return;
+        }
+
+        wp_register_ability('hp-funnels/apply-seo-fixes', [
+            'label'       => __('Apply Funnel SEO Fixes', 'hp-abilities'),
+            'description' => __('Bulk apply SEO fixes to a funnel including metadata and content.', 'hp-abilities'),
+            'category'    => 'hp-funnels',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'slug' => ['type' => 'string', 'description' => 'Funnel slug'],
+                    'fixes' => [
+                        'type' => 'object',
+                        'description' => 'Map of fields to update (focus_keyword, meta_title, meta_description, etc.)',
+                        'properties' => [
+                            'focus_keyword' => ['type' => 'string'],
+                            'meta_title' => ['type' => 'string'],
+                            'meta_description' => ['type' => 'string'],
+                            'hero_image_alt' => ['type' => 'string'],
+                            'authority_image_alt' => ['type' => 'string'],
+                            'authority_bio' => ['type' => 'string', 'description' => 'HTML content for bio'],
+                        ],
+                    ],
+                ],
+                'required' => ['slug', 'fixes'],
+            ],
+            'output_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'success' => ['type' => 'boolean'],
+                    'message' => ['type' => 'string'],
+                    'updated_fields' => ['type' => 'array', 'items' => ['type' => 'string']],
+                ],
+            ],
+            'execute_callback'    => [Abilities\FunnelApi::class, 'applySeoFixes'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'meta' => ['show_in_rest' => true, 'annotations' => ['destructive' => true], 'mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+    }
+
+    /**
      * Register customer lookup ability.
      */
     private static function register_customer_lookup_ability(): void
@@ -1325,7 +1266,6 @@ class Plugin
         ?>
         <div class="wrap">
             <h1><?php echo esc_html__('HP Abilities', 'hp-abilities'); ?></h1>
-            <p><strong><?php echo esc_html__('Plugin Version:', 'hp-abilities'); ?></strong> <?php echo esc_html(defined('HP_ABILITIES_VERSION') ? HP_ABILITIES_VERSION : ''); ?></p>
             
             <div class="card">
                 <h2><?php echo esc_html__('Status', 'hp-abilities'); ?></h2>
@@ -1335,7 +1275,7 @@ class Plugin
                         <span style="color: green;">✓ <?php echo esc_html__('Available', 'hp-abilities'); ?></span>
                     <?php else: ?>
                         <span style="color: orange;">⚠ <?php echo esc_html__('Not available (requires WordPress 6.9+)', 'hp-abilities'); ?></span>
-                    <?php endif; ?>
+                    <? endif; ?>
                 </p>
                 <p>
                     <strong><?php echo esc_html__('REST API Fallback:', 'hp-abilities'); ?></strong>
@@ -1545,18 +1485,3 @@ class Plugin
         <?php
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
