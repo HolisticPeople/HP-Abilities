@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 namespace HP_Abilities;
 
 if (!defined('ABSPATH')) {
@@ -34,17 +34,17 @@ class Plugin
     /**
      * Include HP abilities in WooCommerce MCP server.
      *
-     * @param bool   $include    Whether to include the ability.
-     * @param string $ability_id The ability ID.
+     * @param bool       Whether to include the ability.
+     * @param string  The ability ID.
      * @return bool
      */
-    public static function include_hp_abilities_in_wc_mcp(bool $include, string $ability_id): bool
+    public static function include_hp_abilities_in_wc_mcp(bool , string ): bool
     {
         // Enabling ALL HP tools now that we found the schema issue
-        if (str_starts_with($ability_id, 'hp-')) {
+        if (str_starts_with(, 'hp-')) {
             return true;
         }
-        return $include;
+        return ;
     }
 
     /**
@@ -776,7 +776,7 @@ class Plugin
         // Get funnel price range
         wp_register_ability('hp-economics/price-range', [
             'label'       => __('Get Funnel Price Range', 'hp-abilities'),
-            'description' => __('Get the calculated min/max price range for a funnel. Prices are calculated on funnel save and never $0.', 'hp-abilities'),
+            'description' => __('Get the calculated min/max price range for a funnel. Prices are calculated on funnel save and never .', 'hp-abilities'),
             'category'    => 'hp-seo',
             'input_schema' => [
                 'type' => 'object',
@@ -796,7 +796,7 @@ class Plugin
                     'price_range' => [
                         'type' => 'object',
                         'properties' => [
-                            'min' => ['type' => 'number', 'description' => 'Minimum price (never $0)'],
+                            'min' => ['type' => 'number', 'description' => 'Minimum price (never )'],
                             'max' => ['type' => 'number', 'description' => 'Maximum price'],
                             'currency' => ['type' => 'string', 'description' => 'Currency code (e.g., USD)'],
                             'display' => ['type' => 'string', 'description' => 'Formatted display string'],
@@ -1184,13 +1184,13 @@ class Plugin
      */
     public static function register_rest_routes(): void
     {
-        $namespace = 'hp-abilities/v1';
+         = 'hp-abilities/v1';
 
-        register_rest_route($namespace, '/customers/lookup', [
+        register_rest_route(, '/customers/lookup', [
             'methods'             => 'POST',
-            'callback'            => function ($request) {
+            'callback'            => function () {
                 return Abilities\CustomerLookup::execute([
-                    'email' => $request->get_param('email'),
+                    'email' => ->get_param('email'),
                 ]);
             },
             'permission_callback' => function () {
@@ -1198,21 +1198,21 @@ class Plugin
             },
         ]);
 
-        register_rest_route($namespace, '/orders/search', [
+        register_rest_route(, '/orders/search', [
             'methods'             => 'POST',
-            'callback'            => function ($request) {
-                return Abilities\OrderSearch::execute($request->get_params());
+            'callback'            => function () {
+                return Abilities\OrderSearch::execute(->get_params());
             },
             'permission_callback' => function () {
                 return current_user_can('manage_woocommerce');
             },
         ]);
 
-        register_rest_route($namespace, '/inventory/check', [
+        register_rest_route(, '/inventory/check', [
             'methods'             => 'POST',
-            'callback'            => function ($request) {
+            'callback'            => function () {
                 return Abilities\InventoryCheck::execute([
-                    'skus' => $request->get_param('skus'),
+                    'skus' => ->get_param('skus'),
                 ]);
             },
             'permission_callback' => function () {
@@ -1220,21 +1220,21 @@ class Plugin
             },
         ]);
 
-        register_rest_route($namespace, '/orders/update-status', [
+        register_rest_route(, '/orders/update-status', [
             'methods'             => 'POST',
-            'callback'            => function ($request) {
-                return Abilities\OrderStatus::execute($request->get_params());
+            'callback'            => function () {
+                return Abilities\OrderStatus::execute(->get_params());
             },
             'permission_callback' => function () {
                 return current_user_can('manage_woocommerce');
             },
         ]);
 
-        register_rest_route($namespace, '/funnels/(?P<slug>[a-zA-Z0-9-]+)/seo-audit', [
+        register_rest_route(, '/funnels/(?P<slug>[a-zA-Z0-9-]+)/seo-audit', [
             'methods'             => 'GET',
-            'callback'            => function ($request) {
+            'callback'            => function () {
                 return Abilities\FunnelApi::seoAudit([
-                    'slug' => $request->get_param('slug'),
+                    'slug' => ->get_param('slug'),
                 ]);
             },
             'permission_callback' => function () {
@@ -1262,7 +1262,7 @@ class Plugin
      */
     public static function render_settings_page(): void
     {
-        $abilities_available = function_exists('wp_register_ability');
+         = function_exists('wp_register_ability');
         ?>
         <div class="wrap">
             <h1><?php echo esc_html__('HP Abilities', 'hp-abilities'); ?></h1>
@@ -1271,15 +1271,15 @@ class Plugin
                 <h2><?php echo esc_html__('Status', 'hp-abilities'); ?></h2>
                 <p>
                     <strong><?php echo esc_html__('Abilities API:', 'hp-abilities'); ?></strong>
-                    <?php if ($abilities_available): ?>
-                        <span style="color: green;">✓ <?php echo esc_html__('Available', 'hp-abilities'); ?></span>
+                    <?php if (): ?>
+                        <span style="color: green;">âœ“ <?php echo esc_html__('Available', 'hp-abilities'); ?></span>
                     <?php else: ?>
-                        <span style="color: orange;">⚠ <?php echo esc_html__('Not available (requires WordPress 6.9+)', 'hp-abilities'); ?></span>
+                        <span style="color: orange;">âš  <?php echo esc_html__('Not available (requires WordPress 6.9+)', 'hp-abilities'); ?></span>
                     <?php endif; ?>
                 </p>
                 <p>
                     <strong><?php echo esc_html__('REST API Fallback:', 'hp-abilities'); ?></strong>
-                    <span style="color: green;">✓ <?php echo esc_html__('Active', 'hp-abilities'); ?></span>
+                    <span style="color: green;">âœ“ <?php echo esc_html__('Active', 'hp-abilities'); ?></span>
                 </p>
             </div>
 
