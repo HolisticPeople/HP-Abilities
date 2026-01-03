@@ -1265,7 +1265,7 @@ class Plugin
         $abilities_available = function_exists('wp_register_ability');
         ?>
         <div class="wrap">
-            <h1><?php echo esc_html__('HP Abilities', 'hp-abilities'); ?></h1>
+            <h1><?php echo esc_html__('HP Abilities', 'hp-abilities'); ?> <span style="font-size: 0.5em; vertical-align: middle; background: #eee; padding: 2px 8px; border-radius: 4px;">v<?php echo esc_html(HP_ABILITIES_VERSION); ?></span></h1>
             
             <div class="card">
                 <h2><?php echo esc_html__('Status', 'hp-abilities'); ?></h2>
