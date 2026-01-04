@@ -15,10 +15,6 @@ class Plugin
      */
     public static function init(): void
     {
-        // #region agent log
-        $log = ['sessionId' => 'debug-site-crash', 'runId' => 'initial', 'hypothesisId' => 'C', 'location' => 'Plugin.php:18', 'message' => 'HP_Abilities\\Plugin::init started', 'data' => [], 'timestamp' => microtime(true)*1000];
-        error_log('[AGENT-DEBUG] ' . json_encode($log));
-        // #endregion
         // Register ability categories first (fires before abilities)
         add_action('wp_abilities_api_categories_init', [self::class, 'register_ability_categories']);
         
@@ -33,10 +29,6 @@ class Plugin
 
         // ALWAYS register REST API endpoints for internal tools (like manual SEO audit)
         add_action('rest_api_init', [self::class, 'register_rest_routes']);
-        // #region agent log
-        $log = ['sessionId' => 'debug-site-crash', 'runId' => 'initial', 'hypothesisId' => 'C', 'location' => 'Plugin.php:36', 'message' => 'HP_Abilities\\Plugin::init hooks added', 'data' => [], 'timestamp' => microtime(true)*1000];
-        error_log('[AGENT-DEBUG] ' . json_encode($log));
-        // #endregion
     }
 
     /**
@@ -68,10 +60,6 @@ class Plugin
      */
     public static function register_abilities(): void
     {
-        // #region agent log
-        $log = ['sessionId' => 'debug-site-crash', 'runId' => 'initial', 'hypothesisId' => 'C', 'location' => 'Plugin.php:62', 'message' => 'HP_Abilities\\Plugin::register_abilities started', 'data' => [], 'timestamp' => microtime(true)*1000];
-        error_log('[AGENT-DEBUG] ' . json_encode($log));
-        // #endregion
         // Customer lookup ability
         self::register_customer_lookup_ability();
         
@@ -95,10 +83,6 @@ class Plugin
 
         // SEO & Analytics abilities (requires HP-React-Widgets)
         self::register_seo_abilities();
-        // #region agent log
-        $log = ['sessionId' => 'debug-site-crash', 'runId' => 'initial', 'hypothesisId' => 'C', 'location' => 'Plugin.php:86', 'message' => 'HP_Abilities\\Plugin::register_abilities finished', 'data' => [], 'timestamp' => microtime(true)*1000];
-        error_log('[AGENT-DEBUG] ' . json_encode($log));
-        // #endregion
     }
 
     /**
@@ -1200,10 +1184,6 @@ class Plugin
      */
     public static function register_rest_routes(): void
     {
-        // #region agent log
-        $log = ['sessionId' => 'debug-site-crash', 'runId' => 'initial', 'hypothesisId' => 'C', 'location' => 'Plugin.php:1188', 'message' => 'HP_Abilities\\Plugin::register_rest_routes started', 'data' => [], 'timestamp' => microtime(true)*1000];
-        error_log('[AGENT-DEBUG] ' . json_encode($log));
-        // #endregion
         $namespace = 'hp-abilities/v1';
 
         register_rest_route($namespace, '/customers/lookup', [
@@ -1261,10 +1241,6 @@ class Plugin
                 return current_user_can('manage_woocommerce');
             },
         ]);
-        // #region agent log
-        $log = ['sessionId' => 'debug-site-crash', 'runId' => 'initial', 'hypothesisId' => 'C', 'location' => 'Plugin.php:1244', 'message' => 'HP_Abilities\\Plugin::register_rest_routes finished', 'data' => [], 'timestamp' => microtime(true)*1000];
-        error_log('[AGENT-DEBUG] ' . json_encode($log));
-        // #endregion
     }
 
     /**
