@@ -715,6 +715,55 @@ class Plugin
             <?php endif; ?>
 
             <div class="card" style="margin-top: 20px;">
+                <h2><?php echo esc_html__('MCP Configuration', 'hp-abilities'); ?></h2>
+                <p><?php echo esc_html__('To use these tools in Cursor IDE on another machine, add the following to your %USERPROFILE%\.cursor\mcp.json file:', 'hp-abilities'); ?></p>
+                <textarea readonly style="width: 100%; height: 300px; font-family: monospace; background: #f0f0f0; padding: 10px; border: 1px solid #ccc;"><?php 
+                $mcp_config = [
+                    'mcpServers' => [
+                        'hp_products' => [
+                            'command' => 'node',
+                            'args' => [
+                                'C:\\DEV\\hp-mcp-bridge.js',
+                                site_url('/wp-json/woocommerce/mcp?scope=products'),
+                                'YOUR_API_KEY_HERE'
+                            ],
+                            'type' => 'stdio'
+                        ],
+                        'hp_orders' => [
+                            'command' => 'node',
+                            'args' => [
+                                'C:\\DEV\\hp-mcp-bridge.js',
+                                site_url('/wp-json/woocommerce/mcp?scope=orders'),
+                                'YOUR_API_KEY_HERE'
+                            ],
+                            'type' => 'stdio'
+                        ],
+                        'hp_funnels' => [
+                            'command' => 'node',
+                            'args' => [
+                                'C:\\DEV\\hp-mcp-bridge.js',
+                                site_url('/wp-json/woocommerce/mcp?scope=funnels'),
+                                'YOUR_API_KEY_HERE'
+                            ],
+                            'type' => 'stdio'
+                        ],
+                        'hp_economics' => [
+                            'command' => 'node',
+                            'args' => [
+                                'C:\\DEV\\hp-mcp-bridge.js',
+                                site_url('/wp-json/woocommerce/mcp?scope=economics'),
+                                'YOUR_API_KEY_HERE'
+                            ],
+                            'type' => 'stdio'
+                        ]
+                    ]
+                ];
+                echo esc_textarea(json_encode($mcp_config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                ?></textarea>
+                <p class="description"><?php echo esc_html__('Note: Replace YOUR_API_KEY_HERE with your WooCommerce Consumer Key and Secret joined by a colon (e.g., ck_...:cs_...).', 'hp-abilities'); ?></p>
+            </div>
+
+            <div class="card" style="margin-top: 20px;">
                 <h2><?php echo esc_html__('Registered Abilities', 'hp-abilities'); ?></h2>
                 <p><?php echo esc_html__('The following abilities are registered and exposed to AI agents via MCP.', 'hp-abilities'); ?></p>
                 
