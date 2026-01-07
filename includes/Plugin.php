@@ -130,8 +130,12 @@ class Plugin
             'details' => []
         ];
 
-        // 1. Check callback
-        $callback = $ability->execute_callback;
+        // 1. Check callback using reflection for protected property
+        $reflection = new \ReflectionClass($ability);
+        $callback_prop = $reflection->getProperty('execute_callback');
+        $callback_prop->setAccessible(true);
+        $callback = $callback_prop->getValue($ability);
+
         if (!is_callable($callback)) {
             $health['status'] = 'error';
             $health['message'] = 'Broken';
@@ -1003,7 +1007,7 @@ class Plugin
                                                 </td>
                                                 <td>
                                                     <strong><code><?php echo esc_html($id); ?></code></strong>
-                                                    <div style="font-size: 11px; color: #666;"><?php echo esc_html($ability->description); ?></div>
+                                                    <div style="font-size: 11px; color: #666;"><?php echo esc_html($ability->get_description()); ?></div>
                                                 </td>
                                                 <td style="text-align: center;">
                                                     <span class="status-badge <?php echo $is_enabled ? 'enabled' : 'disabled'; ?>" id="status-<?php echo esc_attr(sanitize_title($id)); ?>">
