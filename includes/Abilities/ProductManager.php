@@ -91,6 +91,41 @@ class ProductManager
     }
 
     /**
+     * Run a GMC compliance audit on a product.
+     */
+    public static function gmcAudit(array $input): array
+    {
+        $sku = isset($input['sku']) ? sanitize_text_field($input['sku']) : '';
+        $id = $sku ? wc_get_product_id_by_sku($sku) : 0;
+        
+        if (!$id && isset($input['product_id'])) {
+            $id = (int) $input['product_id'];
+        }
+        
+        if ($id <= 0) {
+            return [
+                'success' => false,
+                'error' => __('Invalid product SKU or ID', 'hp-abilities')
+            ];
+        }
+
+        $product = wc_get_product($id);
+        if (!$product) {
+            return [
+                'success' => false,
+                'error' => __('Product not found', 'hp-abilities')
+            ];
+        }
+
+        $audit = \HP_Abilities\Utils\GMCValidator::audit($product);
+        
+        return [
+            'success' => true,
+            'data' => $audit
+        ];
+    }
+
+    /**
      * Perform an SEO audit on a product.
      */
     public static function seoAudit(array $input): array

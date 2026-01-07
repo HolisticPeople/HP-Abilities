@@ -363,6 +363,22 @@ class Plugin
             'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
+        wp_register_ability('hp-abilities/products-gmc-audit', [
+            'label'               => 'Product GMC Audit',
+            'description'         => 'Audit product for Google Merchant Center compliance',
+            'category'            => 'hp-seo',
+            'execute_callback'    => [ProductManager::class, 'gmcAudit'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'input_schema'        => [
+                'type'       => 'object',
+                'properties' => [
+                    'sku' => ['type' => 'string', 'description' => 'Product SKU'],
+                ],
+                'required'   => ['sku'],
+            ],
+            'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+
         wp_register_ability('hp-abilities/products-seo-audit', [
             'label'               => 'Product SEO Audit',
             'description'         => 'Perform on-demand SEO audit',
