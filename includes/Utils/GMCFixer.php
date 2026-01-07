@@ -22,6 +22,9 @@ class GMCFixer
 
         // 2. Ensure Yoast SEO Structured Data also reflects the correct weight
         add_filter('wpseo_schema_product', [self::class, 'filter_yoast_schema_weight'], 20, 2);
+
+        // 3. Forcefully add Product piece if missing (fix for "ItemPage" only issues)
+        add_filter('wpseo_schema_graph_pieces', [self::class, 'force_product_schema_piece'], 15, 2);
     }
 
     /**
@@ -63,6 +66,72 @@ class GMCFixer
             }
         }
         return $data;
+    }
+
+    /**
+     * Forcefully add a Product schema piece if Yoast's standard one is missing.
+     * This is a fallback for sites where Yoast identifies products as ItemPage but skips Product type.
+     */
+    public static function force_product_schema_piece($pieces, $context)
+    {
+        if (!is_singular('product')) {
+            return $pieces;
+        }
+
+        $has_product = false;
+        foreach ($pieces as $piece) {
+            if (is_object($piece) && (strpos(get_class($piece), 'Product') !== false)) {
+                $has_product = true;
+                break;
+            }
+        }
+
+        if (!$has_product) {
+            // Add an anonymous class piece that generates the basic Product schema
+            $pieces[] = new class($context) {
+                private $context;
+                public function __construct($context) { $this->context = $context; }
+                public function is_needed(): bool { return true; }
+                public function generate(): array {
+                    $product = wc_get_product($this->context->id);
+                    if (!$product) return [];
+                    
+                    $unit = get_option('woocommerce_weight_unit', 'lb');
+                    $weight = $product->get_weight();
+                    
+                    $data = [
+                        '@type' => 'Product',
+                        '@id' => get_permalink($product->get_id()) . '#product',
+                        'name' => $product->get_name(),
+                        'sku' => $product->get_sku(),
+                        'description' => wp_strip_all_tags($product->get_short_description() ?: $product->get_description()),
+                        'url' => get_permalink($product->get_id()),
+                        'mainEntityOfPage' => [
+                            '@id' => get_permalink($product->get_id()) . '#webpage'
+                        ],
+                        'offers' => [
+                            '@type' => 'Offer',
+                            'price' => number_format((float)$product->get_price(), 2, '.', ''),
+                            'priceCurrency' => get_woocommerce_currency(),
+                            'availability' => 'https://schema.org/' . ($product->is_in_stock() ? 'InStock' : 'OutOfStock'),
+                            'url' => get_permalink($product->get_id())
+                        ]
+                    ];
+
+                    if ($weight) {
+                        $data['weight'] = [
+                            '@type' => 'QuantitativeValue',
+                            'value' => $weight,
+                            'unitText' => $unit
+                        ];
+                    }
+
+                    return $data;
+                }
+            };
+        }
+
+        return $pieces;
     }
 }
 
