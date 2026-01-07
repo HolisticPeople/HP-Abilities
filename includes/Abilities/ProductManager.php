@@ -33,6 +33,21 @@ class ProductManager
             ];
         }
 
+        // --- START GMC COMPLIANCE CHECK ---
+        $product = wc_get_product($id);
+        if ($product) {
+            $audit = \HP_Abilities\Utils\GMCValidator::audit($product, $changes);
+            if (!$audit['success']) {
+                return [
+                    'success' => false,
+                    'error' => __('GMC Policy Violation: Product update blocked to prevent GMC disapproval.', 'hp-abilities'),
+                    'audit' => $audit,
+                    'suggestion' => __('Please fix the reported issues before updating.', 'hp-abilities')
+                ];
+            }
+        }
+        // --- END GMC COMPLIANCE CHECK ---
+
         // Call the Product Manager's REST logic directly
         if (!class_exists('\HP_Products_Manager')) {
             return [
@@ -72,6 +87,41 @@ class ProductManager
         return [
             'success' => true,
             'data' => $data
+        ];
+    }
+
+    /**
+     * Run a GMC compliance audit on a product.
+     */
+    public static function gmcAudit(array $input): array
+    {
+        $sku = isset($input['sku']) ? sanitize_text_field($input['sku']) : '';
+        $id = $sku ? wc_get_product_id_by_sku($sku) : 0;
+        
+        if (!$id && isset($input['product_id'])) {
+            $id = (int) $input['product_id'];
+        }
+        
+        if ($id <= 0) {
+            return [
+                'success' => false,
+                'error' => __('Invalid product SKU or ID', 'hp-abilities')
+            ];
+        }
+
+        $product = wc_get_product($id);
+        if (!$product) {
+            return [
+                'success' => false,
+                'error' => __('Product not found', 'hp-abilities')
+            ];
+        }
+
+        $audit = \HP_Abilities\Utils\GMCValidator::audit($product);
+        
+        return [
+            'success' => true,
+            'data' => $audit
         ];
     }
 

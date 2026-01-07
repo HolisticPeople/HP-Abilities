@@ -23,6 +23,9 @@ class Plugin
      */
     public static function init(): void
     {
+        // Initialize GMC fixes
+        \HP_Abilities\Utils\GMCFixer::init();
+
         // Core WordPress 6.9+ hook names
         add_action('wp_abilities_api_categories_init', [self::class, 'register_ability_categories']);
         add_action('wp_abilities_api_init', [self::class, 'register_abilities']);
@@ -39,12 +42,43 @@ class Plugin
         add_action('admin_menu', [self::class, 'register_settings_page']);
         add_action('admin_init', [self::class, 'register_plugin_settings']);
 
+        // Enqueue Yoast compliance script
+        add_action('admin_enqueue_scripts', [self::class, 'enqueue_yoast_compliance_script']);
+
         // AJAX handlers
         add_action('wp_ajax_hp_toggle_ability', [self::class, 'ajax_toggle_ability']);
         add_action('wp_ajax_hp_check_tool_health', [self::class, 'ajax_check_tool_health']);
 
         // Hook into WooCommerce MCP to include HP abilities
         add_filter('woocommerce_mcp_include_ability', [self::class, 'include_hp_abilities_in_wc_mcp'], 10, 2);
+    }
+
+    /**
+     * Enqueue Yoast compliance script in the admin.
+     */
+    public static function enqueue_yoast_compliance_script($hook): void
+    {
+        // Only load on post edit pages
+        if (!in_array($hook, ['post.php', 'post-new.php'])) {
+            return;
+        }
+
+        // Only for products
+        if (get_post_type() !== 'product') {
+            return;
+        }
+
+        wp_enqueue_script(
+            'hp-yoast-gmc-compliance',
+            plugins_url('assets/js/yoast-gmc-compliance.js', HP_ABILITIES_FILE),
+            ['jquery'],
+            HP_ABILITIES_VERSION,
+            true
+        );
+
+        wp_localize_script('hp-yoast-gmc-compliance', 'hpGmcComplianceData', [
+            'forbiddenKeywords' => \HP_Abilities\Utils\GMCValidator::get_forbidden_keywords()
+        ]);
     }
 
     /**
@@ -191,6 +225,11 @@ class Plugin
         require_once $dir . 'Test.php';
         require_once $dir . 'FunnelApi.php';
         require_once $dir . 'ProductManager.php';
+
+        // Load Utils
+        $utils_dir = HP_ABILITIES_PATH . 'includes/Utils/';
+        require_once $utils_dir . 'GMCValidator.php';
+        require_once $utils_dir . 'GMCFixer.php';
     }
 
     /**
@@ -320,6 +359,22 @@ class Plugin
                     ],
                 ],
                 'required'   => ['sku', 'data'],
+            ],
+            'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+
+        wp_register_ability('hp-abilities/products-gmc-audit', [
+            'label'               => 'Product GMC Audit',
+            'description'         => 'Audit product for Google Merchant Center compliance',
+            'category'            => 'hp-seo',
+            'execute_callback'    => [ProductManager::class, 'gmcAudit'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'input_schema'        => [
+                'type'       => 'object',
+                'properties' => [
+                    'sku' => ['type' => 'string', 'description' => 'Product SKU'],
+                ],
+                'required'   => ['sku'],
             ],
             'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
         ]);
@@ -830,13 +885,25 @@ class Plugin
         $stg_key = ($stg_ck && $stg_cs) ? "{$stg_ck}:{$stg_cs}" : 'YOUR_STAGING_API_KEY_HERE';
         $prod_key = ($prod_ck && $prod_cs) ? "{$prod_ck}:{$prod_cs}" : 'YOUR_PRODUCTION_API_KEY_HERE';
 
+        // Bridge Path Management
+        $bridge_file_path = HP_ABILITIES_PATH . 'bin/hp-mcp-bridge.js';
+        $bridge_exists = file_exists($bridge_file_path);
+        
+        // For the snippet, we try to be smart. If it looks like a local Windows path, we use it.
+        // Otherwise, we use a placeholder or the C:\DEV fallback.
+        $snippet_bridge_path = $bridge_file_path;
+        if (DIRECTORY_SEPARATOR === '/') {
+            // We are on Linux (Server), so we can't give a local path. Fallback to C:\DEV
+            $snippet_bridge_path = 'C:\\DEV\\hp-mcp-bridge.js';
+        }
+
         // Staging Config
         $stg_config = [
             'mcpServers' => [
                 'hp_products_stg' => [
                     'command' => 'node',
                     'args' => [
-                        'C:\\DEV\\hp-mcp-bridge.js',
+                        $snippet_bridge_path,
                         'https://env-holisticpeoplecom-hpdevplus.kinsta.cloud/wp-json/woocommerce/mcp?scope=products',
                         $stg_key
                     ],
@@ -845,7 +912,7 @@ class Plugin
                 'hp_orders_stg' => [
                     'command' => 'node',
                     'args' => [
-                        'C:\\DEV\\hp-mcp-bridge.js',
+                        $snippet_bridge_path,
                         'https://env-holisticpeoplecom-hpdevplus.kinsta.cloud/wp-json/woocommerce/mcp?scope=orders',
                         $stg_key
                     ],
@@ -854,7 +921,7 @@ class Plugin
                 'hp_funnels_stg' => [
                     'command' => 'node',
                     'args' => [
-                        'C:\\DEV\\hp-mcp-bridge.js',
+                        $snippet_bridge_path,
                         'https://env-holisticpeoplecom-hpdevplus.kinsta.cloud/wp-json/woocommerce/mcp?scope=funnels',
                         $stg_key
                     ],
@@ -863,7 +930,7 @@ class Plugin
                 'hp_economics_stg' => [
                     'command' => 'node',
                     'args' => [
-                        'C:\\DEV\\hp-mcp-bridge.js',
+                        $snippet_bridge_path,
                         'https://env-holisticpeoplecom-hpdevplus.kinsta.cloud/wp-json/woocommerce/mcp?scope=economics',
                         $stg_key
                     ],
@@ -878,7 +945,7 @@ class Plugin
                 'hp_products_prod' => [
                     'command' => 'node',
                     'args' => [
-                        'C:\\DEV\\hp-mcp-bridge.js',
+                        $snippet_bridge_path,
                         'https://holisticpeople.com/wp-json/woocommerce/mcp?scope=products',
                         $prod_key
                     ],
@@ -887,7 +954,7 @@ class Plugin
                 'hp_orders_prod' => [
                     'command' => 'node',
                     'args' => [
-                        'C:\\DEV\\hp-mcp-bridge.js',
+                        $snippet_bridge_path,
                         'https://holisticpeople.com/wp-json/woocommerce/mcp?scope=orders',
                         $prod_key
                     ],
@@ -896,7 +963,7 @@ class Plugin
                 'hp_funnels_prod' => [
                     'command' => 'node',
                     'args' => [
-                        'C:\\DEV\\hp-mcp-bridge.js',
+                        $snippet_bridge_path,
                         'https://holisticpeople.com/wp-json/woocommerce/mcp?scope=funnels',
                         $prod_key
                     ],
@@ -905,7 +972,7 @@ class Plugin
                 'hp_economics_prod' => [
                     'command' => 'node',
                     'args' => [
-                        'C:\\DEV\\hp-mcp-bridge.js',
+                        $snippet_bridge_path,
                         'https://holisticpeople.com/wp-json/woocommerce/mcp?scope=economics',
                         $prod_key
                     ],
@@ -1057,6 +1124,31 @@ class Plugin
                         </div>
                     </div>
 
+                    <div class="card" style="margin-top: 20px; max-width: none; border-left: 4px solid <?php echo $bridge_exists ? '#207b4d' : '#d63638'; ?>;">
+                        <h2><?php echo esc_html__('Bridge Source', 'hp-abilities'); ?></h2>
+                        <p>
+                            <?php if ($bridge_exists): ?>
+                                <span style="color: #207b4d; font-weight: bold;">✔ <?php echo esc_html__('Bridge found in plugin', 'hp-abilities'); ?></span>
+                            <?php else: ?>
+                                <span style="color: #d63638; font-weight: bold;">✘ <?php echo esc_html__('Bridge not found in bin/ folder', 'hp-abilities'); ?></span>
+                            <?php endif; ?>
+                        </p>
+                        <p><?php echo esc_html__('The bridge handles Kinsta/Cloudflare headers and JSON-RPC parsing.', 'hp-abilities'); ?></p>
+                        <div style="margin-bottom: 10px;">
+                            <strong><?php echo esc_html__('Filename:', 'hp-abilities'); ?></strong> <code>hp-mcp-bridge.js</code>
+                        </div>
+                        <div style="position: relative;">
+                            <textarea id="bridge_code_snippet" readonly style="width: 100%; height: 200px; font-family: monospace; background: #f9f9f9; padding: 10px; border: 1px solid #ccc; font-size: 11px;"><?php 
+                            echo esc_textarea(file_get_contents(HP_ABILITIES_PATH . 'bin/hp-mcp-bridge.js'));
+                            ?></textarea>
+                            <div style="position: absolute; top: 10px; right: 10px; display: flex; gap: 5px;">
+                                <button type="button" class="button button-small" onclick="copyToClipboard('bridge_code_snippet', this)">Copy Code</button>
+                                <button type="button" class="button button-small button-primary" onclick="saveBridgeFile()">Save File</button>
+                            </div>
+                        </div>
+                        <p class="description"><?php echo esc_html__('Save this file to C:\DEV\hp-mcp-bridge.js (or your local equivalent).', 'hp-abilities'); ?></p>
+                    </div>
+
                     <div class="card" style="margin-top: 20px; max-width: none; border-top: 4px solid #2271b1;">
                         <h2><?php echo esc_html__('Master Protocol', 'hp-abilities'); ?></h2>
                         <p><?php echo esc_html__('Copy this rule into your workspace to guide AI agents in developing new tools.', 'hp-abilities'); ?></p>
@@ -1166,6 +1258,19 @@ class Plugin
                 });
             }
 
+            function saveBridgeFile() {
+                const code = document.getElementById('bridge_code_snippet').value;
+                const blob = new Blob([code], { type: 'application/javascript' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'hp-mcp-bridge.js';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            }
+
             // Inline CSS for spin animation
             const style = document.createElement('style');
             style.innerHTML = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } .spin { animation: spin 2s linear infinite; }';
@@ -1206,7 +1311,8 @@ This protocol ensures all AI agents maintain the "Self-Healing" HP Abilities eco
 - **Kill-Switch**: Use the "Status" toggle to instantly mute tools if security or performance issues arise.
 
 ## 4. MCP Server Sync
-- Use the generated snippets in `mcp.json` to ensure Cursor is using the `hp-mcp-bridge.js`.
+- Use the generated snippets in `mcp.json`. The bridge file is distributed with this plugin in the `bin/` folder.
+- If Cursor is on a remote machine, copy the bridge code from the "Bridge Source" card to your local `C:\DEV\hp-mcp-bridge.js`.
 - Custom bridge handles authentication headers and BOM issues.
 EOD;
     }
