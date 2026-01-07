@@ -16,11 +16,32 @@ class GMCFixer
      */
     public static function init(): void
     {
-        // 1. Map WooCommerce weight to GMC shipping_weight in "Google Listings & Ads" plugin
+        // #region agent log
+        if (function_exists('hp_agent_debug_log')) {
+            hp_agent_debug_log('V87', 'GMCFixer.php:20', 'GMCFixer::init() v0.8.7', [
+                'uri' => $_SERVER['REQUEST_URI'] ?? 'N/A'
+            ]);
+        }
+        // #endregion
+
+        // BYPASS TEST
+        if (isset($_GET['bypass_test'])) {
+            die("HP BYPASS TEST: GMCFixer is active.");
+        }
+
+        // 1. Map WooCommerce weight to GMC shipping_weight
         add_filter('woocommerce_gla_product_attribute_value_shipping_weight', [self::class, 'map_shipping_weight'], 10, 2);
 
         // 2. Add raw schema to a reliable WooCommerce hook as a failsafe
-        add_action('woocommerce_after_single_product', [self::class, 'inject_raw_gmc_schema'], 10);
+        add_action('woocommerce_after_single_product', [self::class, 'inject_raw_gmc_schema'], 1);
+        
+        // 3. Extra hook in the footer just in case WC hook is skipped
+        add_action('wp_footer', [self::class, 'inject_raw_gmc_schema_footer'], 9999);
+    }
+
+    public static function inject_raw_gmc_schema_footer()
+    {
+        self::inject_raw_gmc_schema('FOOTER');
     }
 
     /**
@@ -36,12 +57,26 @@ class GMCFixer
     }
 
     /**
-     * Inject a dedicated GMC-compliant schema block if standard ones are missing.
+     * Inject a dedicated GMC-compliant schema block.
      */
-    public static function inject_raw_gmc_schema(): void
+    public static function inject_raw_gmc_schema($context = 'WC'): void
     {
+        $is_prod = is_product();
+        $is_sing = is_singular('product');
+
+        // #region agent log
+        if (function_exists('hp_agent_debug_log')) {
+            hp_agent_debug_log('V87', 'GMCFixer.php:68', 'inject_raw_gmc_schema check', [
+                'context' => $context,
+                'is_product' => $is_prod,
+                'is_singular' => $is_sing,
+                'post_id' => get_the_ID()
+            ]);
+        }
+        // #endregion
+
         // If we are on a product page, inject the schema
-        if (is_product() || is_singular('product')) {
+        if ($is_prod || $is_sing) {
             $id = get_the_ID();
             $product = wc_get_product($id);
             if (!$product) return;
@@ -77,7 +112,7 @@ class GMCFixer
                 ];
             }
 
-            echo "\n<!-- HP GMC Compliance Bridge (WooCommerce After Single Product) -->\n";
+            echo "\n<!-- HP GMC Compliance Bridge ({$context}) -->\n";
             echo '<script type="application/ld+json">' . wp_json_encode($data) . '</script>' . "\n";
         }
     }
