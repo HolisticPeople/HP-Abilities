@@ -31,8 +31,8 @@ class GMCFixer
         // 1. Map WooCommerce weight to GMC shipping_weight in "Google Listings & Ads" plugin
         add_filter('woocommerce_gla_product_attribute_value_shipping_weight', [self::class, 'map_shipping_weight'], 10, 2);
 
-        // 2. Add raw schema to head as a failsafe
-        add_action('wp_head', [self::class, 'inject_raw_gmc_schema'], 1);
+        // 2. Add raw schema to footer as a failsafe (using high priority to avoid being stripped)
+        add_action('wp_footer', [self::class, 'inject_raw_gmc_schema'], 9999);
     }
 
     /**
@@ -54,7 +54,7 @@ class GMCFixer
     {
         // #region agent log
         if (function_exists('hp_agent_debug_log')) {
-            hp_agent_debug_log('A', 'GMCFixer.php:56', 'inject_raw_gmc_schema() triggered', [
+            hp_agent_debug_log('A', 'GMCFixer.php:56', 'inject_raw_gmc_schema() triggered in footer', [
                 'is_product' => function_exists('is_product') ? is_product() : 'N/A',
                 'is_singular_product' => is_singular('product'),
                 'post_id' => get_the_ID()
@@ -111,14 +111,14 @@ class GMCFixer
 
             // #region agent log
             if (function_exists('hp_agent_debug_log')) {
-                hp_agent_debug_log('C', 'GMCFixer.php:117', 'Echoing bridge', [
+                hp_agent_debug_log('C', 'GMCFixer.php:117', 'Echoing bridge in footer', [
                     'sku' => $product->get_sku(),
                     'weight' => $weight
                 ]);
             }
             // #endregion
 
-            echo "\n<!-- HP GMC Compliance Bridge -->\n";
+            echo "\n<!-- HP GMC Compliance Bridge (Footer) -->\n";
             echo '<script type="application/ld+json">' . wp_json_encode($data) . '</script>' . "\n";
         }
     }
