@@ -40,6 +40,11 @@ class GMCFixer
      */
     public static function inject_raw_gmc_schema(): void
     {
+        // For production debugging
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('GMCFixer: inject_raw_gmc_schema called');
+        }
+
         // If we are on a product page, inject the schema
         if (is_product() || is_singular('product')) {
             $id = get_the_ID();
