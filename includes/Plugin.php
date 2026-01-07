@@ -1187,7 +1187,4 @@ This protocol ensures all AI agents maintain the "Self-Healing" HP Abilities eco
 - Custom bridge handles authentication headers and BOM issues.
 EOD;
     }
-        </div>
-        <?php
-    }
 }
