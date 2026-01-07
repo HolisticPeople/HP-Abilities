@@ -23,6 +23,9 @@ class Plugin
      */
     public static function init(): void
     {
+        // Initialize GMC fixes
+        \HP_Abilities\Utils\GMCFixer::init();
+
         // Core WordPress 6.9+ hook names
         add_action('wp_abilities_api_categories_init', [self::class, 'register_ability_categories']);
         add_action('wp_abilities_api_init', [self::class, 'register_abilities']);
@@ -39,12 +42,43 @@ class Plugin
         add_action('admin_menu', [self::class, 'register_settings_page']);
         add_action('admin_init', [self::class, 'register_plugin_settings']);
 
+        // Enqueue Yoast compliance script
+        add_action('admin_enqueue_scripts', [self::class, 'enqueue_yoast_compliance_script']);
+
         // AJAX handlers
         add_action('wp_ajax_hp_toggle_ability', [self::class, 'ajax_toggle_ability']);
         add_action('wp_ajax_hp_check_tool_health', [self::class, 'ajax_check_tool_health']);
 
         // Hook into WooCommerce MCP to include HP abilities
         add_filter('woocommerce_mcp_include_ability', [self::class, 'include_hp_abilities_in_wc_mcp'], 10, 2);
+    }
+
+    /**
+     * Enqueue Yoast compliance script in the admin.
+     */
+    public static function enqueue_yoast_compliance_script($hook): void
+    {
+        // Only load on post edit pages
+        if (!in_array($hook, ['post.php', 'post-new.php'])) {
+            return;
+        }
+
+        // Only for products
+        if (get_post_type() !== 'product') {
+            return;
+        }
+
+        wp_enqueue_script(
+            'hp-yoast-gmc-compliance',
+            plugins_url('assets/js/yoast-gmc-compliance.js', HP_ABILITIES_FILE),
+            ['jquery'],
+            HP_ABILITIES_VERSION,
+            true
+        );
+
+        wp_localize_script('hp-yoast-gmc-compliance', 'hpGmcComplianceData', [
+            'forbiddenKeywords' => \HP_Abilities\Utils\GMCValidator::get_forbidden_keywords()
+        ]);
     }
 
     /**
@@ -191,6 +225,11 @@ class Plugin
         require_once $dir . 'Test.php';
         require_once $dir . 'FunnelApi.php';
         require_once $dir . 'ProductManager.php';
+
+        // Load Utils
+        $utils_dir = HP_ABILITIES_PATH . 'includes/Utils/';
+        require_once $utils_dir . 'GMCValidator.php';
+        require_once $utils_dir . 'GMCFixer.php';
     }
 
     /**

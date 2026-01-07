@@ -33,6 +33,21 @@ class ProductManager
             ];
         }
 
+        // --- START GMC COMPLIANCE CHECK ---
+        $product = wc_get_product($id);
+        if ($product) {
+            $audit = \HP_Abilities\Utils\GMCValidator::audit($product, $changes);
+            if (!$audit['success']) {
+                return [
+                    'success' => false,
+                    'error' => __('GMC Policy Violation: Product update blocked to prevent GMC disapproval.', 'hp-abilities'),
+                    'audit' => $audit,
+                    'suggestion' => __('Please fix the reported issues before updating.', 'hp-abilities')
+                ];
+            }
+        }
+        // --- END GMC COMPLIANCE CHECK ---
+
         // Call the Product Manager's REST logic directly
         if (!class_exists('\HP_Products_Manager')) {
             return [
