@@ -74,21 +74,15 @@ class GMCFixer
      */
     public static function force_product_schema_piece($pieces, $context)
     {
+        // For debugging: log that we are here
+        // error_log('GMCFixer: checking schema pieces for ' . get_the_ID());
+
         if (!is_singular('product')) {
             return $pieces;
         }
 
-        $has_product = false;
-        foreach ($pieces as $piece) {
-            if (is_object($piece) && (strpos(get_class($piece), 'Product') !== false)) {
-                $has_product = true;
-                break;
-            }
-        }
-
-        if (!$has_product) {
-            // Add an anonymous class piece that generates the basic Product schema
-            $pieces[] = new class($context) {
+        // Add our custom product piece regardless of others for a quick test
+        $pieces[] = new class($context) {
                 private $context;
                 public function __construct($context) { $this->context = $context; }
                 public function is_needed(): bool { return true; }
