@@ -57,7 +57,7 @@ class Plugin
         }
 
         $registry = \WP_Abilities_Registry::get_instance();
-        $all_abilities = $registry->get_all();
+        $all_abilities = $registry->get_all_registered();
         $hp_abilities = [];
 
         foreach ($all_abilities as $id => $ability) {
@@ -118,7 +118,7 @@ class Plugin
         }
 
         $registry = \WP_Abilities_Registry::get_instance();
-        $ability = $registry->get($ability_id);
+        $ability = $registry->get_registered($ability_id);
 
         if (!$ability) {
             wp_send_json_error('Ability not found');
