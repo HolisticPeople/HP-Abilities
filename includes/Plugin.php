@@ -974,7 +974,6 @@ class Plugin
                     <div class="card" style="margin-top: 20px; max-width: none;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <h2><?php echo esc_html__('Registered Abilities', 'hp-abilities'); ?></h2>
-                            <button type="button" class="button button-secondary" onclick="checkAllHealth()"><?php echo esc_html__('Check All Health', 'hp-abilities'); ?></button>
                         </div>
                         <p><?php echo esc_html__('Manage and monitor all HP Abilities registered in the system.', 'hp-abilities'); ?></p>
 
@@ -983,10 +982,15 @@ class Plugin
                             $count = count($group['tools']);
                         ?>
                             <div style="margin-top: 20px;">
-                                <h3 style="background: #f0f0f1; padding: 8px 12px; border-radius: 4px; border-left: 4px solid #2271b1;">
-                                    <?php echo esc_html($group['label']); ?> (<?php echo (int)$count; ?>)
-                                </h3>
-                                <table class="widefat fixed striped">
+                                <div style="background: #f0f0f1; padding: 8px 12px; border-radius: 4px; border-left: 4px solid #2271b1; display: flex; justify-content: space-between; align-items: center;">
+                                    <h3 style="margin: 0;"><?php echo esc_html($group['label']); ?> (<?php echo (int)$count; ?>)</h3>
+                                    <div style="display: flex; gap: 10px;">
+                                        <button type="button" class="button button-small" onclick="checkGroupHealth('<?php echo esc_js($group_id); ?>')"><?php echo esc_html__('Check Group Health', 'hp-abilities'); ?></button>
+                                        <button type="button" class="button button-small" onclick="toggleGroup('<?php echo esc_js($group_id); ?>', true)"><?php echo esc_html__('Enable All', 'hp-abilities'); ?></button>
+                                        <button type="button" class="button button-small" onclick="toggleGroup('<?php echo esc_js($group_id); ?>', false)"><?php echo esc_html__('Disable All', 'hp-abilities'); ?></button>
+                                    </div>
+                                </div>
+                                <table class="widefat fixed striped" id="table-<?php echo esc_attr($group_id); ?>">
                                     <thead>
                                         <tr>
                                             <th style="width: 30px;"><input type="checkbox" readonly checked disabled></th>
@@ -1142,9 +1146,24 @@ class Plugin
                 });
             }
 
-            function checkAllHealth() {
-                const tools = <?php echo json_encode(array_keys($hp_abilities)); ?>;
-                tools.forEach(id => checkHealth(id));
+            function toggleGroup(groupId, enabled) {
+                const table = document.getElementById('table-' + groupId);
+                const checkboxes = table.querySelectorAll('tbody input[type="checkbox"]');
+                checkboxes.forEach(cb => {
+                    if (cb.checked !== enabled) {
+                        cb.checked = enabled;
+                        cb.dispatchEvent(new Event('change'));
+                    }
+                });
+            }
+
+            function checkGroupHealth(groupId) {
+                const table = document.getElementById('table-' + groupId);
+                const rows = table.querySelectorAll('tbody tr');
+                rows.forEach(row => {
+                    const toolId = row.querySelector('strong code').innerText;
+                    checkHealth(toolId);
+                });
             }
 
             // Inline CSS for spin animation
