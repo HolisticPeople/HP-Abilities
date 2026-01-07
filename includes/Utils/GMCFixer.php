@@ -5,12 +5,6 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// #region agent log
-if (function_exists('hp_agent_debug_log')) {
-    hp_agent_debug_log('A', 'GMCFixer.php:10', 'GMCFixer file included');
-}
-// #endregion
-
 /**
  * Handles automatic mapping of WooCommerce data to Google Merchant Center (GMC) requirements.
  * Focuses on filters for the "Google Listings & Ads" plugin and Yoast SEO.
@@ -22,12 +16,6 @@ class GMCFixer
      */
     public static function init(): void
     {
-        // #region agent log
-        if (function_exists('hp_agent_debug_log')) {
-            hp_agent_debug_log('A', 'GMCFixer.php:27', 'GMCFixer::init() entered');
-        }
-        // #endregion
-
         // 1. Map WooCommerce weight to GMC shipping_weight in "Google Listings & Ads" plugin
         add_filter('woocommerce_gla_product_attribute_value_shipping_weight', [self::class, 'map_shipping_weight'], 10, 2);
 
@@ -52,30 +40,10 @@ class GMCFixer
      */
     public static function inject_raw_gmc_schema(): void
     {
-        // #region agent log
-        if (function_exists('hp_agent_debug_log')) {
-            hp_agent_debug_log('A', 'GMCFixer.php:56', 'inject_raw_gmc_schema() triggered in footer', [
-                'is_product' => function_exists('is_product') ? is_product() : 'N/A',
-                'is_singular_product' => is_singular('product'),
-                'post_id' => get_the_ID()
-            ]);
-        }
-        // #endregion
-
         // If we are on a product page, inject the schema
         if (is_product() || is_singular('product')) {
             $id = get_the_ID();
             $product = wc_get_product($id);
-            
-            // #region agent log
-            if (function_exists('hp_agent_debug_log')) {
-                hp_agent_debug_log('B', 'GMCFixer.php:73', 'Inside product check', [
-                    'id' => $id,
-                    'has_product' => !!$product
-                ]);
-            }
-            // #endregion
-
             if (!$product) return;
 
             $unit = get_option('woocommerce_weight_unit', 'lb');
@@ -108,15 +76,6 @@ class GMCFixer
                     'unitText' => $unit
                 ];
             }
-
-            // #region agent log
-            if (function_exists('hp_agent_debug_log')) {
-                hp_agent_debug_log('C', 'GMCFixer.php:117', 'Echoing bridge in footer', [
-                    'sku' => $product->get_sku(),
-                    'weight' => $weight
-                ]);
-            }
-            // #endregion
 
             echo "\n<!-- HP GMC Compliance Bridge (Footer) -->\n";
             echo '<script type="application/ld+json">' . wp_json_encode($data) . '</script>' . "\n";

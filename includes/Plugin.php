@@ -23,23 +23,9 @@ class Plugin
      */
     public static function init(): void
     {
-        // #region agent log
-        if (function_exists('hp_agent_debug_log')) {
-            hp_agent_debug_log('A', 'Plugin.php:25', 'Plugin::init() start', [
-                'has_GMCFixer' => class_exists('\HP_Abilities\Utils\GMCFixer', false)
-            ]);
-        }
-        // #endregion
-
         // Initialize GMC fixes
         if (class_exists('\HP_Abilities\Utils\GMCFixer')) {
             \HP_Abilities\Utils\GMCFixer::init();
-        } else {
-            // #region agent log
-            if (function_exists('hp_agent_debug_log')) {
-                hp_agent_debug_log('E', 'Plugin.php:38', 'FATAL: GMCFixer not found after autoload attempt');
-            }
-            // #endregion
         }
 
         // Core WordPress 6.9+ hook names
@@ -68,7 +54,7 @@ class Plugin
         // Hook into WooCommerce MCP to include HP abilities
         add_filter('woocommerce_mcp_include_ability', [self::class, 'include_hp_abilities_in_wc_mcp'], 10, 2);
     }
-    // ... (rest of the file remains same, but I need to provide it to overwrite)
+
     /**
      * Enqueue Yoast compliance script in the admin.
      */
@@ -164,7 +150,7 @@ class Plugin
 
         $ability_id = sanitize_text_field($_POST['ability_id'] ?? '');
         if (empty($ability_id)) {
-            wp_send_json_error('Missing ability ID');
+            wp_send_json_error('Missing_ability_ID');
         }
 
         $registry = \WP_Abilities_Registry::get_instance();
