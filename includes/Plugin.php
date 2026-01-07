@@ -799,110 +799,117 @@ class Plugin
         <div class="wrap">
             <h1><?php echo esc_html__('HP Abilities', 'hp-abilities'); ?> <span style="font-size: 0.5em; vertical-align: middle; background: #eee; padding: 2px 8px; border-radius: 4px;">v<?php echo esc_html(HP_ABILITIES_VERSION); ?></span></h1>
             
-            <form method="post" action="options.php">
-                <?php settings_fields('hp_abilities_settings'); ?>
-                
-                <div class="card">
-                    <h2><?php echo esc_html__('Status', 'hp-abilities'); ?></h2>
-                    <p>
-                        <strong><?php echo esc_html__('Abilities API:', 'hp-abilities'); ?></strong>
-                        <?php if ($abilities_available): ?>
-                            <span style="color: green;">✔ <?php echo esc_html__('Available', 'hp-abilities'); ?></span>
-                        <?php else: ?>
-                            <span style="color: orange;">⚠ <?php echo esc_html__('Not available (requires WordPress 6.9+)', 'hp-abilities'); ?></span>
-                        <?php endif; ?>
-                    </p>
-                    <p>
-                        <strong><?php echo esc_html__('HP-React-Widgets:', 'hp-abilities'); ?></strong>
-                        <?php if ($hp_rw_active): ?>
-                            <span style="color: green;">✔ <?php echo esc_html__('Active', 'hp-abilities'); ?></span>
-                        <?php else: ?>
-                            <span style="color: #d63638;">✘ <?php echo esc_html__('Inactive (Required for Funnel/Economics abilities)', 'hp-abilities'); ?></span>
-                        <?php endif; ?>
-                    </p>
-                </div>
-
-                <div class="card" style="margin-top: 20px;">
-                    <h2><?php echo esc_html__('WooCommerce API Credentials', 'hp-abilities'); ?></h2>
-                    <p><?php echo esc_html__('Enter your WooCommerce Consumer Key and Secret for Staging and Production. These are used to generate the Cursor configuration snippets below.', 'hp-abilities'); ?></p>
-                    
-                    <table class="form-table">
-                        <tr>
-                            <th scope="row"><label for="hp_abilities_stg_ck"><?php echo esc_html__('Staging Consumer Key', 'hp-abilities'); ?></label></th>
-                            <td><input name="hp_abilities_stg_ck" type="text" id="hp_abilities_stg_ck" value="<?php echo esc_attr($stg_ck); ?>" class="regular-text" placeholder="ck_..."></td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="hp_abilities_stg_cs"><?php echo esc_html__('Staging Consumer Secret', 'hp-abilities'); ?></label></th>
-                            <td><input name="hp_abilities_stg_cs" type="password" id="hp_abilities_stg_cs" value="<?php echo esc_attr($stg_cs); ?>" class="regular-text" placeholder="cs_..."></td>
-                        </tr>
-                        <tr><td colspan="2"><hr></td></tr>
-                        <tr>
-                            <th scope="row"><label for="hp_abilities_prod_ck"><?php echo esc_html__('Production Consumer Key', 'hp-abilities'); ?></label></th>
-                            <td><input name="hp_abilities_prod_ck" type="text" id="hp_abilities_prod_ck" value="<?php echo esc_attr($prod_ck); ?>" class="regular-text" placeholder="ck_..."></td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><label for="hp_abilities_prod_cs"><?php echo esc_html__('Production Consumer Secret', 'hp-abilities'); ?></label></th>
-                            <td><input name="hp_abilities_prod_cs" type="password" id="hp_abilities_prod_cs" value="<?php echo esc_attr($prod_cs); ?>" class="regular-text" placeholder="cs_..."></td>
-                        </tr>
-                    </table>
-                    <?php submit_button(); ?>
-                </div>
-            </form>
-
-            <?php if ($hp_rw_active): ?>
-            <div class="card" style="margin-top: 20px; border-left: 4px solid #72aee6;">
-                <h2><?php echo esc_html__('AI Configuration', 'hp-abilities'); ?></h2>
-                <p><?php echo esc_html__('Configure economic guidelines and version control settings for AI funnel creation.', 'hp-abilities'); ?></p>
-                <p>
-                    <a href="<?php echo esc_url(admin_url('edit.php?post_type=hp-funnel&page=hp-funnel-ai-settings')); ?>" class="button button-secondary">
-                        <?php echo esc_html__('Go to AI Settings', 'hp-abilities'); ?>
-                    </a>
-                </p>
-            </div>
-            <?php endif; ?>
-
-            <div class="card" style="margin-top: 20px;">
-                <h2><?php echo esc_html__('Cursor Configuration Snippets', 'hp-abilities'); ?></h2>
-                <p><?php echo esc_html__('Copy these snippets into your %USERPROFILE%\.cursor\mcp.json file. They include the API keys saved above.', 'hp-abilities'); ?></p>
-                
-                <div style="display: flex; gap: 20px; margin-top: 15px;">
-                    <div style="flex: 1;">
-                        <h3><?php echo esc_html__('Staging Environment', 'hp-abilities'); ?></h3>
-                        <div style="position: relative;">
-                            <textarea id="stg_mcp_snippet" readonly style="width: 100%; height: 250px; font-family: monospace; background: #f9f9f9; padding: 10px; border: 1px solid #ccc;"><?php 
-                            echo esc_textarea(json_encode($stg_config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-                            ?></textarea>
-                            <button class="button button-small" style="position: absolute; top: 10px; right: 10px;" onclick="copyToClipboard('stg_mcp_snippet', this)">Copy</button>
+            <div style="display: flex; gap: 20px; align-items: flex-start;">
+                <!-- Left Column: Credentials and Status -->
+                <div style="flex: 1; min-width: 400px;">
+                    <form method="post" action="options.php">
+                        <?php settings_fields('hp_abilities_settings'); ?>
+                        
+                        <div class="card" style="margin-top: 0; max-width: none;">
+                            <h2><?php echo esc_html__('Status', 'hp-abilities'); ?></h2>
+                            <p>
+                                <strong><?php echo esc_html__('Abilities API:', 'hp-abilities'); ?></strong>
+                                <?php if ($abilities_available): ?>
+                                    <span style="color: green;">✔ <?php echo esc_html__('Available', 'hp-abilities'); ?></span>
+                                <?php else: ?>
+                                    <span style="color: orange;">⚠ <?php echo esc_html__('Not available (requires WordPress 6.9+)', 'hp-abilities'); ?></span>
+                                <?php endif; ?>
+                            </p>
+                            <p>
+                                <strong><?php echo esc_html__('HP-React-Widgets:', 'hp-abilities'); ?></strong>
+                                <?php if ($hp_rw_active): ?>
+                                    <span style="color: green;">✔ <?php echo esc_html__('Active', 'hp-abilities'); ?></span>
+                                <?php else: ?>
+                                    <span style="color: #d63638;">✘ <?php echo esc_html__('Inactive (Required for Funnel/Economics abilities)', 'hp-abilities'); ?></span>
+                                <?php endif; ?>
+                            </p>
                         </div>
-                    </div>
-                    <div style="flex: 1;">
-                        <h3><?php echo esc_html__('Production Environment', 'hp-abilities'); ?></h3>
-                        <div style="position: relative;">
-                            <textarea id="prod_mcp_snippet" readonly style="width: 100%; height: 250px; font-family: monospace; background: #f9f9f9; padding: 10px; border: 1px solid #ccc;"><?php 
-                            echo esc_textarea(json_encode($prod_config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-                            ?></textarea>
-                            <button class="button button-small" style="position: absolute; top: 10px; right: 10px;" onclick="copyToClipboard('prod_mcp_snippet', this)">Copy</button>
+
+                        <div class="card" style="margin-top: 20px; max-width: none;">
+                            <h2><?php echo esc_html__('WooCommerce API Credentials', 'hp-abilities'); ?></h2>
+                            <p><?php echo esc_html__('Enter keys to populate the snippets on the right.', 'hp-abilities'); ?></p>
+                            
+                            <table class="form-table">
+                                <tr>
+                                    <th scope="row" style="width: 150px;"><label for="hp_abilities_stg_ck"><?php echo esc_html__('Staging CK', 'hp-abilities'); ?></label></th>
+                                    <td><input name="hp_abilities_stg_ck" type="text" id="hp_abilities_stg_ck" value="<?php echo esc_attr($stg_ck); ?>" class="regular-text" style="width: 100%;" placeholder="ck_..."></td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="hp_abilities_stg_cs"><?php echo esc_html__('Staging CS', 'hp-abilities'); ?></label></th>
+                                    <td><input name="hp_abilities_stg_cs" type="password" id="hp_abilities_stg_cs" value="<?php echo esc_attr($stg_cs); ?>" class="regular-text" style="width: 100%;" placeholder="cs_..."></td>
+                                </tr>
+                                <tr><td colspan="2"><hr></td></tr>
+                                <tr>
+                                    <th scope="row"><label for="hp_abilities_prod_ck"><?php echo esc_html__('Prod CK', 'hp-abilities'); ?></label></th>
+                                    <td><input name="hp_abilities_prod_ck" type="text" id="hp_abilities_prod_ck" value="<?php echo esc_attr($prod_ck); ?>" class="regular-text" style="width: 100%;" placeholder="ck_..."></td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="hp_abilities_prod_cs"><?php echo esc_html__('Prod CS', 'hp-abilities'); ?></label></th>
+                                    <td><input name="hp_abilities_prod_cs" type="password" id="hp_abilities_prod_cs" value="<?php echo esc_attr($prod_cs); ?>" class="regular-text" style="width: 100%;" placeholder="cs_..."></td>
+                                </tr>
+                            </table>
+                            <?php submit_button(); ?>
                         </div>
+                    </form>
+
+                    <?php if ($hp_rw_active): ?>
+                    <div class="card" style="margin-top: 20px; border-left: 4px solid #72aee6; max-width: none;">
+                        <h2><?php echo esc_html__('AI Configuration', 'hp-abilities'); ?></h2>
+                        <p><?php echo esc_html__('Configure economic guidelines and version control.', 'hp-abilities'); ?></p>
+                        <p>
+                            <a href="<?php echo esc_url(admin_url('edit.php?post_type=hp-funnel&page=hp-funnel-ai-settings')); ?>" class="button button-secondary">
+                                <?php echo esc_html__('Go to AI Settings', 'hp-abilities'); ?>
+                            </a>
+                        </p>
                     </div>
+                    <?php endif; ?>
                 </div>
 
-                <script>
-                function copyToClipboard(elementId, btn) {
-                    var copyText = document.getElementById(elementId);
-                    copyText.select();
-                    copyText.setSelectionRange(0, 99999);
-                    navigator.clipboard.writeText(copyText.value);
-                    
-                    var originalText = btn.innerText;
-                    btn.innerText = 'Copied!';
-                    setTimeout(function() {
-                        btn.innerText = originalText;
-                    }, 2000);
-                }
-                </script>
+                <!-- Right Column: Snippets -->
+                <div style="flex: 1.5; min-width: 600px;">
+                    <div class="card" style="margin-top: 0; max-width: none;">
+                        <h2><?php echo esc_html__('Cursor Configuration Snippets', 'hp-abilities'); ?></h2>
+                        <p><?php echo esc_html__('Copy these snippets into your %USERPROFILE%\.cursor\mcp.json file.', 'hp-abilities'); ?></p>
+                        
+                        <div style="margin-top: 15px;">
+                            <h3><?php echo esc_html__('Staging Environment', 'hp-abilities'); ?></h3>
+                            <div style="position: relative;">
+                                <textarea id="stg_mcp_snippet" readonly style="width: 100%; height: 200px; font-family: monospace; background: #f9f9f9; padding: 10px; border: 1px solid #ccc; font-size: 11px;"><?php 
+                                echo esc_textarea(json_encode($stg_config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                                ?></textarea>
+                                <button class="button button-small" style="position: absolute; top: 10px; right: 10px;" onclick="copyToClipboard('stg_mcp_snippet', this)">Copy</button>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 20px;">
+                            <h3><?php echo esc_html__('Production Environment', 'hp-abilities'); ?></h3>
+                            <div style="position: relative;">
+                                <textarea id="prod_mcp_snippet" readonly style="width: 100%; height: 200px; font-family: monospace; background: #f9f9f9; padding: 10px; border: 1px solid #ccc; font-size: 11px;"><?php 
+                                echo esc_textarea(json_encode($prod_config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                                ?></textarea>
+                                <button class="button button-small" style="position: absolute; top: 10px; right: 10px;" onclick="copyToClipboard('prod_mcp_snippet', this)">Copy</button>
+                            </div>
+                        </div>
+
+                        <script>
+                        function copyToClipboard(elementId, btn) {
+                            var copyText = document.getElementById(elementId);
+                            copyText.select();
+                            copyText.setSelectionRange(0, 99999);
+                            navigator.clipboard.writeText(copyText.value);
+                            
+                            var originalText = btn.innerText;
+                            btn.innerText = 'Copied!';
+                            setTimeout(function() {
+                                btn.innerText = originalText;
+                            }, 2000);
+                        }
+                        </script>
+                    </div>
+                </div>
             </div>
 
-            <div class="card" style="margin-top: 20px;">
+            <div class="card" style="margin-top: 20px; max-width: none;">
                 <h2><?php echo esc_html__('Registered Abilities', 'hp-abilities'); ?></h2>
                 <p><?php echo esc_html__('The following abilities are registered and exposed to AI agents via MCP.', 'hp-abilities'); ?></p>
                 
