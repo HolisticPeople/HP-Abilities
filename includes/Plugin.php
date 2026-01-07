@@ -23,6 +23,26 @@ class Plugin
      */
     public static function init(): void
     {
+        // #region agent log
+        if (!function_exists('hp_agent_debug_log')) {
+            function hp_agent_debug_log($hypothesisId, $location, $message, $data = []) {
+                $log_file = ABSPATH . 'wp-content/hp_debug.log';
+                $entry = json_encode([
+                    'id' => uniqid('log_', true),
+                    'timestamp' => round(microtime(true) * 1000),
+                    'location' => $location,
+                    'message' => $message,
+                    'data' => $data,
+                    'sessionId' => 'debug-session',
+                    'runId' => 'run1',
+                    'hypothesisId' => $hypothesisId
+                ]) . PHP_EOL;
+                file_put_contents($log_file, $entry, FILE_APPEND);
+            }
+        }
+        hp_agent_debug_log('A', 'Plugin.php:25', 'Plugin::init() start');
+        // #endregion
+
         // Initialize GMC fixes
         \HP_Abilities\Utils\GMCFixer::init();
 

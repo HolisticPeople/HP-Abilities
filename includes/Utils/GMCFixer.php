@@ -16,6 +16,12 @@ class GMCFixer
      */
     public static function init(): void
     {
+        // #region agent log
+        if (function_exists('hp_agent_debug_log')) {
+            hp_agent_debug_log('A', 'GMCFixer.php:20', 'GMCFixer::init() start');
+        }
+        // #endregion
+
         // 1. Map WooCommerce weight to GMC shipping_weight in "Google Listings & Ads" plugin
         add_filter('woocommerce_gla_product_attribute_value_shipping_weight', [self::class, 'map_shipping_weight'], 10, 2);
 
@@ -40,9 +46,30 @@ class GMCFixer
      */
     public static function inject_raw_gmc_schema(): void
     {
+        // #region agent log
+        if (function_exists('hp_agent_debug_log')) {
+            hp_agent_debug_log('A', 'GMCFixer.php:52', 'inject_raw_gmc_schema() triggered', [
+                'is_product' => function_exists('is_product') ? is_product() : 'N/A',
+                'is_singular_product' => is_singular('product'),
+                'post_id' => get_the_ID()
+            ]);
+        }
+        // #endregion
+
         // If we are on a product page, inject the schema
         if (is_product() || is_singular('product')) {
-            $product = wc_get_product(get_the_ID());
+            $id = get_the_ID();
+            $product = wc_get_product($id);
+            
+            // #region agent log
+            if (function_exists('hp_agent_debug_log')) {
+                hp_agent_debug_log('B', 'GMCFixer.php:66', 'Inside product check', [
+                    'id' => $id,
+                    'has_product' => !!$product
+                ]);
+            }
+            // #endregion
+
             if (!$product) return;
 
             $unit = get_option('woocommerce_weight_unit', 'lb');
@@ -75,6 +102,15 @@ class GMCFixer
                     'unitText' => $unit
                 ];
             }
+
+            // #region agent log
+            if (function_exists('hp_agent_debug_log')) {
+                hp_agent_debug_log('C', 'GMCFixer.php:110', 'Echoing bridge', [
+                    'sku' => $product->get_sku(),
+                    'weight' => $weight
+                ]);
+            }
+            // #endregion
 
             echo "\n<!-- HP GMC Compliance Bridge -->\n";
             echo '<script type="application/ld+json">' . wp_json_encode($data) . '</script>' . "\n";
