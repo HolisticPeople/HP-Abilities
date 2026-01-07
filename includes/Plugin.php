@@ -1079,13 +1079,19 @@ class Plugin
                             <?php endif; ?>
                         </p>
                         <p><?php echo esc_html__('The bridge handles Kinsta/Cloudflare headers and JSON-RPC parsing.', 'hp-abilities'); ?></p>
+                        <div style="margin-bottom: 10px;">
+                            <strong><?php echo esc_html__('Filename:', 'hp-abilities'); ?></strong> <code>hp-mcp-bridge.js</code>
+                        </div>
                         <div style="position: relative;">
                             <textarea id="bridge_code_snippet" readonly style="width: 100%; height: 200px; font-family: monospace; background: #f9f9f9; padding: 10px; border: 1px solid #ccc; font-size: 11px;"><?php 
                             echo esc_textarea(file_get_contents(HP_ABILITIES_PATH . 'bin/hp-mcp-bridge.js'));
                             ?></textarea>
-                            <button class="button button-small" style="position: absolute; top: 10px; right: 10px;" onclick="copyToClipboard('bridge_code_snippet', this)">Copy Code</button>
+                            <div style="position: absolute; top: 10px; right: 10px; display: flex; gap: 5px;">
+                                <button type="button" class="button button-small" onclick="copyToClipboard('bridge_code_snippet', this)">Copy Code</button>
+                                <button type="button" class="button button-small button-primary" onclick="saveBridgeFile()">Save File</button>
+                            </div>
                         </div>
-                        <p class="description"><?php echo esc_html__('Save this code to the path specified in your mcp.json.', 'hp-abilities'); ?></p>
+                        <p class="description"><?php echo esc_html__('Save this file to C:\DEV\hp-mcp-bridge.js (or your local equivalent).', 'hp-abilities'); ?></p>
                     </div>
 
                     <div class="card" style="margin-top: 20px; max-width: none; border-top: 4px solid #2271b1;">
@@ -1195,6 +1201,19 @@ class Plugin
                     const toolId = row.querySelector('strong code').innerText;
                     checkHealth(toolId);
                 });
+            }
+
+            function saveBridgeFile() {
+                const code = document.getElementById('bridge_code_snippet').value;
+                const blob = new Blob([code], { type: 'application/javascript' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'hp-mcp-bridge.js';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
             }
 
             // Inline CSS for spin animation
