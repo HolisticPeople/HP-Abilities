@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       HP Abilities
  * Description:       Exposes WooCommerce capabilities via the WordPress Abilities API for AI agent integrations.
- * Version:           0.8.5
+ * Version:           0.8.6
  * Requires at least: 6.9
  * Requires PHP:      7.4
  * Author:            Holistic People
@@ -14,39 +14,10 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// ABSOLUTE TOP LOG
-$log_file = ABSPATH . 'wp-content/hp_debug.log';
-$entry = json_encode([
-    'timestamp' => round(microtime(true) * 1000),
-    'message' => 'HP ABILITIES BOOTSTRAP',
-    'uri' => $_SERVER['REQUEST_URI'] ?? 'N/A'
-]) . PHP_EOL;
-@file_put_contents($log_file, $entry, FILE_APPEND);
-
-define('HP_ABILITIES_VERSION', '0.8.5');
+define('HP_ABILITIES_VERSION', '0.8.6');
 define('HP_ABILITIES_FILE', __FILE__);
 define('HP_ABILITIES_PATH', plugin_dir_path(__FILE__));
 define('HP_ABILITIES_URL', plugin_dir_url(__FILE__));
-
-/**
- * Debug Logger for Agent
- */
-if (!function_exists('hp_agent_debug_log')) {
-    function hp_agent_debug_log($hypothesisId, $location, $message, $data = []) {
-        $log_file = ABSPATH . 'wp-content/hp_debug.log';
-        $entry = json_encode([
-            'id' => uniqid('log_', true),
-            'timestamp' => round(microtime(true) * 1000),
-            'location' => $location,
-            'message' => $message,
-            'data' => $data,
-            'sessionId' => 'debug-session',
-            'runId' => 'run1',
-            'hypothesisId' => $hypothesisId
-        ]) . PHP_EOL;
-        @file_put_contents($log_file, $entry, FILE_APPEND);
-    }
-}
 
 // Simple autoloader
 spl_autoload_register(function ($class) {
@@ -63,8 +34,14 @@ spl_autoload_register(function ($class) {
     }
 });
 
-// FORCE INITIALIZE
-\HP_Abilities\Plugin::init();
+// Initialize plugin
+if (function_exists('wp_register_ability') || did_action('plugins_loaded')) {
+    \HP_Abilities\Plugin::init();
+} else {
+    add_action('plugins_loaded', function () {
+        \HP_Abilities\Plugin::init();
+    });
+}
 
 // Add settings link
 add_filter('plugin_action_links_' . plugin_basename(__FILE__), function (array $links): array {

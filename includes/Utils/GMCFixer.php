@@ -16,46 +16,11 @@ class GMCFixer
      */
     public static function init(): void
     {
-        // FORCE DIE TEST
-        if (isset($_GET['die_test'])) {
-            die("GMCFixer::init() reached. PHP is alive for this request. Version 0.8.5");
-        }
-
-        // #region agent log
-        if (function_exists('hp_agent_debug_log')) {
-            hp_agent_debug_log('V85', 'GMCFixer.php:26', 'GMCFixer::init() v0.8.5', [
-                'uri' => $_SERVER['REQUEST_URI'] ?? 'unknown'
-            ]);
-        }
-        // #endregion
-
-        // 1. Map WooCommerce weight to GMC shipping_weight
+        // 1. Map WooCommerce weight to GMC shipping_weight in "Google Listings & Ads" plugin
         add_filter('woocommerce_gla_product_attribute_value_shipping_weight', [self::class, 'map_shipping_weight'], 10, 2);
 
-        // 2. Comprehensive Hook Test
-        add_action('wp_head', [self::class, 'debug_hook'], 1, 0);
-        add_action('template_redirect', [self::class, 'debug_hook'], 1, 0);
-        add_action('woocommerce_before_main_content', [self::class, 'debug_hook'], 1, 0);
-        add_action('wp_footer', [self::class, 'debug_hook'], 1, 0);
-        add_action('shutdown', [self::class, 'debug_hook'], 1, 0);
-    }
-
-    public static function debug_hook()
-    {
-        $hook = current_filter();
-        
-        // #region agent log
-        if (function_exists('hp_agent_debug_log')) {
-            hp_agent_debug_log('V85', 'GMCFixer.php:50', "HOOK FIRED: $hook", [
-                'is_product' => function_exists('is_product') ? is_product() : 'N/A',
-                'post_id' => get_the_ID()
-            ]);
-        }
-        // #endregion
-
-        if (in_array($hook, ['wp_head', 'wp_footer', 'woocommerce_before_main_content'])) {
-            echo "\n<!-- HP GMC DEBUG 0.8.5: $hook -->\n";
-        }
+        // 2. Add raw schema to a reliable WooCommerce hook as a failsafe
+        add_action('woocommerce_after_single_product', [self::class, 'inject_raw_gmc_schema'], 10);
     }
 
     /**
@@ -68,5 +33,52 @@ class GMCFixer
         if (empty($weight)) return $value;
         $unit = get_option('woocommerce_weight_unit', 'lb');
         return $weight . ' ' . $unit;
+    }
+
+    /**
+     * Inject a dedicated GMC-compliant schema block if standard ones are missing.
+     */
+    public static function inject_raw_gmc_schema(): void
+    {
+        // If we are on a product page, inject the schema
+        if (is_product() || is_singular('product')) {
+            $id = get_the_ID();
+            $product = wc_get_product($id);
+            if (!$product) return;
+
+            $unit = get_option('woocommerce_weight_unit', 'lb');
+            $weight = $product->get_weight();
+            
+            $data = [
+                '@context' => 'https://schema.org/',
+                '@type' => 'Product',
+                'name' => $product->get_name(),
+                'sku' => $product->get_sku(),
+                'description' => wp_strip_all_tags($product->get_short_description() ?: $product->get_description()),
+                'image' => get_the_post_thumbnail_url($product->get_id(), 'full'),
+                'brand' => [
+                    '@type' => 'Brand',
+                    'name' => 'HolisticPeople'
+                ],
+                'offers' => [
+                    '@type' => 'Offer',
+                    'price' => number_format((float)$product->get_price(), 2, '.', ''),
+                    'priceCurrency' => get_woocommerce_currency(),
+                    'availability' => 'https://schema.org/' . ($product->is_in_stock() ? 'InStock' : 'OutOfStock'),
+                    'url' => get_permalink($product->get_id())
+                ]
+            ];
+
+            if ($weight) {
+                $data['weight'] = [
+                    '@type' => 'QuantitativeValue',
+                    'value' => $weight,
+                    'unitText' => $unit
+                ];
+            }
+
+            echo "\n<!-- HP GMC Compliance Bridge (WooCommerce After Single Product) -->\n";
+            echo '<script type="application/ld+json">' . wp_json_encode($data) . '</script>' . "\n";
+        }
     }
 }
