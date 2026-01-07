@@ -674,7 +674,198 @@ class Plugin
         );
     }
 
-    public static function render_settings_page(): void {
-        echo '<div class="wrap"><h1>HP Abilities</h1><p>Version ' . HP_ABILITIES_VERSION . '</p></div>';
+    public static function render_settings_page(): void
+    {
+        $abilities_available = function_exists('wp_register_ability');
+        $hp_rw_active = class_exists('\HP_RW\Plugin');
+        ?>
+        <div class="wrap">
+            <h1><?php echo esc_html__('HP Abilities', 'hp-abilities'); ?> <span style="font-size: 0.5em; vertical-align: middle; background: #eee; padding: 2px 8px; border-radius: 4px;">v<?php echo esc_html(HP_ABILITIES_VERSION); ?></span></h1>
+            
+            <div class="card">
+                <h2><?php echo esc_html__('Status', 'hp-abilities'); ?></h2>
+                <p>
+                    <strong><?php echo esc_html__('Abilities API:', 'hp-abilities'); ?></strong>
+                    <?php if ($abilities_available): ?>
+                        <span style="color: green;">✔ <?php echo esc_html__('Available', 'hp-abilities'); ?></span>
+                    <?php else: ?>
+                        <span style="color: orange;">⚠ <?php echo esc_html__('Not available (requires WordPress 6.9+)', 'hp-abilities'); ?></span>
+                    <?php endif; ?>
+                </p>
+                <p>
+                    <strong><?php echo esc_html__('HP-React-Widgets:', 'hp-abilities'); ?></strong>
+                    <?php if ($hp_rw_active): ?>
+                        <span style="color: green;">✔ <?php echo esc_html__('Active', 'hp-abilities'); ?></span>
+                    <?php else: ?>
+                        <span style="color: #d63638;">✘ <?php echo esc_html__('Inactive (Required for Funnel/Economics abilities)', 'hp-abilities'); ?></span>
+                    <?php endif; ?>
+                </p>
+            </div>
+
+            <?php if ($hp_rw_active): ?>
+            <div class="card" style="margin-top: 20px; border-left: 4px solid #72aee6;">
+                <h2><?php echo esc_html__('AI Configuration', 'hp-abilities'); ?></h2>
+                <p><?php echo esc_html__('Configure economic guidelines and version control settings for AI funnel creation.', 'hp-abilities'); ?></p>
+                <p>
+                    <a href="<?php echo esc_url(admin_url('edit.php?post_type=hp-funnel&page=hp-funnel-ai-settings')); ?>" class="button button-primary">
+                        <?php echo esc_html__('Go to AI Settings', 'hp-abilities'); ?>
+                    </a>
+                </p>
+            </div>
+            <?php endif; ?>
+
+            <div class="card" style="margin-top: 20px;">
+                <h2><?php echo esc_html__('Registered Abilities', 'hp-abilities'); ?></h2>
+                <p><?php echo esc_html__('The following abilities are registered and exposed to AI agents via MCP.', 'hp-abilities'); ?></p>
+                
+                <table class="widefat">
+                    <thead>
+                        <tr>
+                            <th><?php echo esc_html__('Ability ID', 'hp-abilities'); ?></th>
+                            <th><?php echo esc_html__('Description', 'hp-abilities'); ?></th>
+                            <th><?php echo esc_html__('Category', 'hp-abilities'); ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="background: #f9f9f9;"><td colspan="3"><strong><?php echo esc_html__('Store Administration', 'hp-abilities'); ?></strong></td></tr>
+                        <tr>
+                            <td><code>hp-abilities/inventory-check</code></td>
+                            <td><?php echo esc_html__('Check stock levels by SKU', 'hp-abilities'); ?></td>
+                            <td><code>hp-admin</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/products-search</code></td>
+                            <td><?php echo esc_html__('Search WooCommerce products with HP filters', 'hp-abilities'); ?></td>
+                            <td><code>hp-admin</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/products-get</code></td>
+                            <td><?php echo esc_html__('Get product details by SKU', 'hp-abilities'); ?></td>
+                            <td><code>hp-admin</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/products-calculate-supply</code></td>
+                            <td><?php echo esc_html__('Calculate product supply days based on servings', 'hp-abilities'); ?></td>
+                            <td><code>hp-admin</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/products-update-comprehensive</code></td>
+                            <td><?php echo esc_html__('Comprehensive update: core fields, ACF, and SEO', 'hp-abilities'); ?></td>
+                            <td><code>hp-admin</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/products-seo-audit</code></td>
+                            <td><?php echo esc_html__('Perform on-demand SEO health check', 'hp-abilities'); ?></td>
+                            <td><code>hp-admin</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/customers-lookup</code></td>
+                            <td><?php echo esc_html__('Get customer profile and history by email', 'hp-abilities'); ?></td>
+                            <td><code>hp-admin</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/orders-search</code></td>
+                            <td><?php echo esc_html__('Search WooCommerce orders', 'hp-abilities'); ?></td>
+                            <td><code>hp-admin</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/orders-update-status</code></td>
+                            <td><?php echo esc_html__('Change WooCommerce order status', 'hp-abilities'); ?></td>
+                            <td><code>hp-admin</code></td>
+                        </tr>
+
+                        <tr style="background: #f9f9f9;"><td colspan="3"><strong><?php echo esc_html__('Funnels & Protocols', 'hp-abilities'); ?></strong></td></tr>
+                        <tr>
+                            <td><code>hp-abilities/funnels-list</code></td>
+                            <td><?php echo esc_html__('List all HP funnels', 'hp-abilities'); ?></td>
+                            <td><code>hp-funnels</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/funnels-get</code></td>
+                            <td><?php echo esc_html__('Get complete funnel configuration by slug', 'hp-abilities'); ?></td>
+                            <td><code>hp-funnels</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/funnels-create</code></td>
+                            <td><?php echo esc_html__('Create a new funnel from JSON configuration', 'hp-abilities'); ?></td>
+                            <td><code>hp-funnels</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/funnels-update</code></td>
+                            <td><?php echo esc_html__('Update an existing funnel configuration', 'hp-abilities'); ?></td>
+                            <td><code>hp-funnels</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/funnels-update-sections</code></td>
+                            <td><?php echo esc_html__('Update specific sections of a funnel', 'hp-abilities'); ?></td>
+                            <td><code>hp-funnels</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/funnels-validate</code></td>
+                            <td><?php echo esc_html__('Validate a funnel JSON configuration', 'hp-abilities'); ?></td>
+                            <td><code>hp-funnels</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/funnels-restore-version</code></td>
+                            <td><?php echo esc_html__('Restore a funnel to a previously saved version', 'hp-abilities'); ?></td>
+                            <td><code>hp-funnels</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/funnels-explain-system</code></td>
+                            <td><?php echo esc_html__('Get funnel architecture documentation', 'hp-abilities'); ?></td>
+                            <td><code>hp-funnels</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/funnels-schema</code></td>
+                            <td><?php echo esc_html__('Get funnel JSON schema with AI hints', 'hp-abilities'); ?></td>
+                            <td><code>hp-funnels</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/funnels-versions-list</code></td>
+                            <td><?php echo esc_html__('List saved backup versions of a funnel', 'hp-abilities'); ?></td>
+                            <td><code>hp-funnels</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/funnels-versions-create</code></td>
+                            <td><?php echo esc_html__('Create a manual backup version of a funnel', 'hp-abilities'); ?></td>
+                            <td><code>hp-funnels</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/protocols-build-kit</code></td>
+                            <td><?php echo esc_html__('Build a product kit from a set of supplements', 'hp-abilities'); ?></td>
+                            <td><code>hp-funnels</code></td>
+                        </tr>
+
+                        <tr style="background: #f9f9f9;"><td colspan="3"><strong><?php echo esc_html__('SEO & Economics', 'hp-abilities'); ?></strong></td></tr>
+                        <tr>
+                            <td><code>hp-abilities/funnels-apply-seo-fixes</code></td>
+                            <td><?php echo esc_html__('Bulk apply SEO fixes to a funnel', 'hp-abilities'); ?></td>
+                            <td><code>hp-funnels</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/seo-funnel-schema</code></td>
+                            <td><?php echo esc_html__('Get JSON-LD schema for a funnel', 'hp-abilities'); ?></td>
+                            <td><code>hp-seo</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/funnels-seo-audit</code></td>
+                            <td><?php echo esc_html__('Perform an SEO audit on a funnel', 'hp-abilities'); ?></td>
+                            <td><code>hp-seo</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/economics-calculate</code></td>
+                            <td><?php echo esc_html__('Calculate profitability for an offer', 'hp-abilities'); ?></td>
+                            <td><code>hp-economics</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>hp-abilities/economics-validate</code></td>
+                            <td><?php echo esc_html__('Validate an offer against economic guidelines', 'hp-abilities'); ?></td>
+                            <td><code>hp-economics</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php
     }
 }
