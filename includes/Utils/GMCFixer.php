@@ -54,6 +54,11 @@ class GMCFixer
             'name' => $product->get_name(),
             'sku' => $product->get_sku(),
             'description' => wp_strip_all_tags($product->get_short_description() ?: $product->get_description()),
+            'image' => get_the_post_thumbnail_url($product->get_id(), 'full'),
+            'brand' => [
+                '@type' => 'Brand',
+                'name' => 'HolisticPeople'
+            ],
             'offers' => [
                 '@type' => 'Offer',
                 'price' => number_format((float)$product->get_price(), 2, '.', ''),
