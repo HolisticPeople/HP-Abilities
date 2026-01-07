@@ -25,6 +25,16 @@ class Test
             'received_args' => $args,
         ];
     }
+
+    /**
+     * Test tool for economics scope.
+     *
+     * @return array
+     */
+    public static function economicsTest(): array
+    {
+        return ['status' => 'ok', 'message' => 'Economics scope is active'];
+    }
 }
 
 

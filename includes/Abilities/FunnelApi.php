@@ -142,7 +142,7 @@ class FunnelApi
         }
 
         $input = self::ensureArrayRecursive($input);
-        $slug = sanitize_text_field($input['slug'] ?? '');
+        $slug = sanitize_text_field($input['funnel_slug'] ?? $input['slug'] ?? '');
         if (empty($slug)) {
             return ['success' => false, 'error' => 'Slug is required'];
         }
@@ -257,7 +257,7 @@ class FunnelApi
         }
 
         $input = self::ensureArrayRecursive($input);
-        $slug = $input['slug'] ?? '';
+        $slug = sanitize_text_field($input['funnel_slug'] ?? $input['slug'] ?? '');
         if (empty($slug)) {
             return ['success' => false, 'error' => 'Slug is required'];
         }
@@ -292,8 +292,8 @@ class FunnelApi
         }
 
         $input = self::ensureArrayRecursive($input);
-        $slug = $input['slug'] ?? '';
-        $description = $input['description'] ?? 'Manual backup';
+        $slug = sanitize_text_field($input['funnel_slug'] ?? $input['slug'] ?? '');
+        $description = $input['description'] ?? $input['note'] ?? 'Manual backup';
 
         if (empty($slug)) {
             return ['success' => false, 'error' => 'Slug is required'];
@@ -393,7 +393,7 @@ class FunnelApi
         }
 
         $input = self::ensureArrayRecursive($input);
-        $slug = $input['slug'] ?? '';
+        $slug = sanitize_text_field($input['funnel_slug'] ?? $input['slug'] ?? '');
         $data = $input['data'] ?? [];
 
         if (empty($slug) && empty($data)) {
@@ -440,7 +440,7 @@ class FunnelApi
         }
 
         $input = self::ensureArrayRecursive($input);
-        $slug = sanitize_text_field($input['slug'] ?? '');
+        $slug = sanitize_text_field($input['funnel_slug'] ?? $input['slug'] ?? '');
         $fixes = $input['fixes'] ?? [];
 
         if (empty($slug)) {
@@ -523,7 +523,11 @@ class FunnelApi
             return ['success' => false, 'error' => 'Product catalog service not available'];
         }
 
-        $products = \HP_RW\Services\ProductCatalogService::search($search, $category, $limit);
+        $products = \HP_RW\Services\ProductCatalogService::searchProducts([
+            'search' => $search,
+            'category' => $category,
+            'limit' => $limit,
+        ]);
 
         return [
             'success' => true,
@@ -554,7 +558,7 @@ class FunnelApi
             return ['success' => false, 'error' => 'Product catalog service not available'];
         }
 
-        $product = \HP_RW\Services\ProductCatalogService::getBySku($sku);
+        $product = \HP_RW\Services\ProductCatalogService::getProductDetails($sku);
         if (!$product) {
             return ['success' => false, 'error' => "Product with SKU '$sku' not found"];
         }
@@ -622,7 +626,10 @@ class FunnelApi
             return ['success' => false, 'error' => 'Protocol kit builder service not available'];
         }
 
-        $kit = \HP_RW\Services\ProtocolKitBuilder::buildFromProtocol($supplements, $durationDays);
+        $kit = \HP_RW\Services\ProtocolKitBuilder::buildKit([
+            'supplements' => $supplements,
+            'duration_days' => $durationDays,
+        ]);
 
         return [
             'success' => true,
@@ -688,7 +695,11 @@ class FunnelApi
             return ['success' => false, 'error' => 'Economics service not available'];
         }
 
-        $validation = \HP_RW\Services\EconomicsService::validateOffer($items, $price, $shippingScenario);
+        $validation = \HP_RW\Services\EconomicsService::validateOffer([
+            'items' => $items,
+            'price' => $price,
+            'shipping_scenario' => $shippingScenario,
+        ]);
 
         return [
             'success' => true,
@@ -738,7 +749,7 @@ class FunnelApi
         }
 
         $input = self::ensureArrayRecursive($input);
-        $slug = sanitize_text_field($input['funnel_slug'] ?? '');
+        $slug = sanitize_text_field($input['funnel_slug'] ?? $input['slug'] ?? '');
         if (empty($slug)) {
             return ['success' => false, 'error' => 'funnel_slug is required'];
         }
@@ -773,7 +784,7 @@ class FunnelApi
         }
 
         $input = self::ensureArrayRecursive($input);
-        $slug = sanitize_text_field($input['funnel_slug'] ?? '');
+        $slug = sanitize_text_field($input['funnel_slug'] ?? $input['slug'] ?? '');
         if (empty($slug)) {
             return ['success' => false, 'error' => 'funnel_slug is required'];
         }
