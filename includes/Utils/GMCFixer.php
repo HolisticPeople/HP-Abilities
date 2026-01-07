@@ -18,12 +18,12 @@ class GMCFixer
     {
         // FORCE DIE TEST
         if (isset($_GET['die_test'])) {
-            die("GMCFixer::init() reached. PHP is alive for this request.");
+            die("GMCFixer::init() reached. PHP is alive for this request. Version 0.8.5");
         }
 
         // #region agent log
         if (function_exists('hp_agent_debug_log')) {
-            hp_agent_debug_log('V84', 'GMCFixer.php:26', 'GMCFixer::init() v0.8.4', [
+            hp_agent_debug_log('V85', 'GMCFixer.php:26', 'GMCFixer::init() v0.8.5', [
                 'uri' => $_SERVER['REQUEST_URI'] ?? 'unknown'
             ]);
         }
@@ -46,7 +46,7 @@ class GMCFixer
         
         // #region agent log
         if (function_exists('hp_agent_debug_log')) {
-            hp_agent_debug_log('V84', 'GMCFixer.php:50', "HOOK FIRED: $hook", [
+            hp_agent_debug_log('V85', 'GMCFixer.php:50', "HOOK FIRED: $hook", [
                 'is_product' => function_exists('is_product') ? is_product() : 'N/A',
                 'post_id' => get_the_ID()
             ]);
@@ -54,7 +54,7 @@ class GMCFixer
         // #endregion
 
         if (in_array($hook, ['wp_head', 'wp_footer', 'woocommerce_before_main_content'])) {
-            echo "\n<!-- HP GMC DEBUG 0.8.4: $hook -->\n";
+            echo "\n<!-- HP GMC DEBUG 0.8.5: $hook -->\n";
         }
     }
 
