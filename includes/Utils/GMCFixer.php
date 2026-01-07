@@ -18,22 +18,33 @@ class GMCFixer
     {
         // #region agent log
         if (function_exists('hp_agent_debug_log')) {
-            hp_agent_debug_log('AB', 'GMCFixer.php:20', 'GMCFixer::init() start');
+            hp_agent_debug_log('V81', 'GMCFixer.php:20', 'GMCFixer::init() v0.8.1 start', [
+                'ver' => defined('HP_ABILITIES_VERSION') ? HP_ABILITIES_VERSION : 'unknown'
+            ]);
         }
         // #endregion
 
         // 1. Map WooCommerce weight to GMC shipping_weight in "Google Listings & Ads" plugin
         add_filter('woocommerce_gla_product_attribute_value_shipping_weight', [self::class, 'map_shipping_weight'], 10, 2);
 
-        // 2. Add raw schema to various hooks to see which one sticks on production
-        add_action('wp_head', [self::class, 'inject_raw_gmc_schema_head'], 9999);
-        add_action('woocommerce_after_single_product', [self::class, 'inject_raw_gmc_schema_wc'], 9999);
-        add_action('wp_footer', [self::class, 'inject_raw_gmc_schema_footer'], 9999);
+        // 2. Add raw schema - RAW LOG TEST
+        add_action('wp_head', [self::class, 'raw_log_test'], 1);
     }
 
-    public static function inject_raw_gmc_schema_head() { self::inject_raw_gmc_schema('HEAD'); }
-    public static function inject_raw_gmc_schema_wc() { self::inject_raw_gmc_schema('WC_HOOK'); }
-    public static function inject_raw_gmc_schema_footer() { self::inject_raw_gmc_schema('FOOTER'); }
+    public static function raw_log_test()
+    {
+        // #region agent log
+        if (function_exists('hp_agent_debug_log')) {
+            hp_agent_debug_log('V81', 'GMCFixer.php:38', 'RAW LOG TEST: wp_head fired', [
+                'uri' => $_SERVER['REQUEST_URI'] ?? 'unknown',
+                'is_product' => function_exists('is_product') ? is_product() : 'N/A'
+            ]);
+        }
+        // #endregion
+        
+        // Final attempt: inject a comment no matter what
+        echo "\n<!-- HP GMC DEBUG 0.8.1 -->\n";
+    }
 
     /**
      * Map WC product weight to the GMC shipping_weight attribute.
@@ -45,66 +56,5 @@ class GMCFixer
         if (empty($weight)) return $value;
         $unit = get_option('woocommerce_weight_unit', 'lb');
         return $weight . ' ' . $unit;
-    }
-
-    /**
-     * Inject a dedicated GMC-compliant schema block.
-     */
-    public static function inject_raw_gmc_schema(string $hook_name): void
-    {
-        $is_prod = is_product();
-        $is_sing = is_singular('product');
-
-        // #region agent log
-        if (function_exists('hp_agent_debug_log')) {
-            hp_agent_debug_log('AB', 'GMCFixer.php:55', 'inject_raw_gmc_schema triggered', [
-                'hook' => $hook_name,
-                'is_product' => $is_prod,
-                'is_singular' => $is_sing,
-                'post_id' => get_the_ID()
-            ]);
-        }
-        // #endregion
-
-        // If we are on a product page, inject the schema
-        if ($is_prod || $is_sing) {
-            $id = get_the_ID();
-            $product = wc_get_product($id);
-            if (!$product) return;
-
-            $unit = get_option('woocommerce_weight_unit', 'lb');
-            $weight = $product->get_weight();
-            
-            $data = [
-                '@context' => 'https://schema.org/',
-                '@type' => 'Product',
-                'name' => $product->get_name(),
-                'sku' => $product->get_sku(),
-                'description' => wp_strip_all_tags($product->get_short_description() ?: $product->get_description()),
-                'image' => get_the_post_thumbnail_url($product->get_id(), 'full'),
-                'brand' => [
-                    '@type' => 'Brand',
-                    'name' => 'HolisticPeople'
-                ],
-                'offers' => [
-                    '@type' => 'Offer',
-                    'price' => number_format((float)$product->get_price(), 2, '.', ''),
-                    'priceCurrency' => get_woocommerce_currency(),
-                    'availability' => 'https://schema.org/' . ($product->is_in_stock() ? 'InStock' : 'OutOfStock'),
-                    'url' => get_permalink($product->get_id())
-                ]
-            ];
-
-            if ($weight) {
-                $data['weight'] = [
-                    '@type' => 'QuantitativeValue',
-                    'value' => $weight,
-                    'unitText' => $unit
-                ];
-            }
-
-            echo "\n<!-- HP GMC Compliance Bridge ({$hook_name}) -->\n";
-            echo '<script type="application/ld+json">' . wp_json_encode($data) . '</script>' . "\n";
-        }
     }
 }
