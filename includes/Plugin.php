@@ -24,27 +24,23 @@ class Plugin
     public static function init(): void
     {
         // #region agent log
-        if (!function_exists('hp_agent_debug_log')) {
-            function hp_agent_debug_log($hypothesisId, $location, $message, $data = []) {
-                $log_file = ABSPATH . 'wp-content/hp_debug.log';
-                $entry = json_encode([
-                    'id' => uniqid('log_', true),
-                    'timestamp' => round(microtime(true) * 1000),
-                    'location' => $location,
-                    'message' => $message,
-                    'data' => $data,
-                    'sessionId' => 'debug-session',
-                    'runId' => 'run1',
-                    'hypothesisId' => $hypothesisId
-                ]) . PHP_EOL;
-                file_put_contents($log_file, $entry, FILE_APPEND);
-            }
+        if (function_exists('hp_agent_debug_log')) {
+            hp_agent_debug_log('A', 'Plugin.php:25', 'Plugin::init() start', [
+                'has_GMCFixer' => class_exists('\HP_Abilities\Utils\GMCFixer', false)
+            ]);
         }
-        hp_agent_debug_log('A', 'Plugin.php:25', 'Plugin::init() start');
         // #endregion
 
         // Initialize GMC fixes
-        \HP_Abilities\Utils\GMCFixer::init();
+        if (class_exists('\HP_Abilities\Utils\GMCFixer')) {
+            \HP_Abilities\Utils\GMCFixer::init();
+        } else {
+            // #region agent log
+            if (function_exists('hp_agent_debug_log')) {
+                hp_agent_debug_log('E', 'Plugin.php:38', 'FATAL: GMCFixer not found after autoload attempt');
+            }
+            // #endregion
+        }
 
         // Core WordPress 6.9+ hook names
         add_action('wp_abilities_api_categories_init', [self::class, 'register_ability_categories']);
@@ -72,7 +68,7 @@ class Plugin
         // Hook into WooCommerce MCP to include HP abilities
         add_filter('woocommerce_mcp_include_ability', [self::class, 'include_hp_abilities_in_wc_mcp'], 10, 2);
     }
-
+    // ... (rest of the file remains same, but I need to provide it to overwrite)
     /**
      * Enqueue Yoast compliance script in the admin.
      */

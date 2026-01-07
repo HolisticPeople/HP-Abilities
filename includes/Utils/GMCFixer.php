@@ -5,6 +5,12 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// #region agent log
+if (function_exists('hp_agent_debug_log')) {
+    hp_agent_debug_log('A', 'GMCFixer.php:10', 'GMCFixer file included');
+}
+// #endregion
+
 /**
  * Handles automatic mapping of WooCommerce data to Google Merchant Center (GMC) requirements.
  * Focuses on filters for the "Google Listings & Ads" plugin and Yoast SEO.
@@ -18,7 +24,7 @@ class GMCFixer
     {
         // #region agent log
         if (function_exists('hp_agent_debug_log')) {
-            hp_agent_debug_log('A', 'GMCFixer.php:20', 'GMCFixer::init() start');
+            hp_agent_debug_log('A', 'GMCFixer.php:27', 'GMCFixer::init() entered');
         }
         // #endregion
 
@@ -48,7 +54,7 @@ class GMCFixer
     {
         // #region agent log
         if (function_exists('hp_agent_debug_log')) {
-            hp_agent_debug_log('A', 'GMCFixer.php:52', 'inject_raw_gmc_schema() triggered', [
+            hp_agent_debug_log('A', 'GMCFixer.php:56', 'inject_raw_gmc_schema() triggered', [
                 'is_product' => function_exists('is_product') ? is_product() : 'N/A',
                 'is_singular_product' => is_singular('product'),
                 'post_id' => get_the_ID()
@@ -63,7 +69,7 @@ class GMCFixer
             
             // #region agent log
             if (function_exists('hp_agent_debug_log')) {
-                hp_agent_debug_log('B', 'GMCFixer.php:66', 'Inside product check', [
+                hp_agent_debug_log('B', 'GMCFixer.php:73', 'Inside product check', [
                     'id' => $id,
                     'has_product' => !!$product
                 ]);
@@ -105,7 +111,7 @@ class GMCFixer
 
             // #region agent log
             if (function_exists('hp_agent_debug_log')) {
-                hp_agent_debug_log('C', 'GMCFixer.php:110', 'Echoing bridge', [
+                hp_agent_debug_log('C', 'GMCFixer.php:117', 'Echoing bridge', [
                     'sku' => $product->get_sku(),
                     'weight' => $weight
                 ]);
