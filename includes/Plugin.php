@@ -35,11 +35,35 @@ class Plugin
             self::register_ability_categories();
         }
 
-        // Register settings page
+        // Register settings page and settings
         add_action('admin_menu', [self::class, 'register_settings_page']);
+        add_action('admin_init', [self::class, 'register_plugin_settings']);
 
         // Hook into WooCommerce MCP to include HP abilities
         add_filter('woocommerce_mcp_include_ability', [self::class, 'include_hp_abilities_in_wc_mcp'], 10, 2);
+    }
+
+    /**
+     * Register plugin settings for API keys.
+     */
+    public static function register_plugin_settings(): void
+    {
+        register_setting('hp_abilities_settings', 'hp_abilities_stg_ck', [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ]);
+        register_setting('hp_abilities_settings', 'hp_abilities_stg_cs', [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ]);
+        register_setting('hp_abilities_settings', 'hp_abilities_prod_ck', [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ]);
+        register_setting('hp_abilities_settings', 'hp_abilities_prod_cs', [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ]);
     }
 
     /**
@@ -678,36 +702,159 @@ class Plugin
     {
         $abilities_available = function_exists('wp_register_ability');
         $hp_rw_active = class_exists('\HP_RW\Plugin');
+
+        // Fetch saved keys
+        $stg_ck = get_option('hp_abilities_stg_ck', '');
+        $stg_cs = get_option('hp_abilities_stg_cs', '');
+        $prod_ck = get_option('hp_abilities_prod_ck', '');
+        $prod_cs = get_option('hp_abilities_prod_cs', '');
+
+        $stg_key = ($stg_ck && $stg_cs) ? "{$stg_ck}:{$stg_cs}" : 'YOUR_STAGING_API_KEY_HERE';
+        $prod_key = ($prod_ck && $prod_cs) ? "{$prod_ck}:{$prod_cs}" : 'YOUR_PRODUCTION_API_KEY_HERE';
+
+        // Staging Config
+        $stg_config = [
+            'mcpServers' => [
+                'hp_products_stg' => [
+                    'command' => 'node',
+                    'args' => [
+                        'C:\\DEV\\hp-mcp-bridge.js',
+                        'https://env-holisticpeoplecom-hpdevplus.kinsta.cloud/wp-json/woocommerce/mcp?scope=products',
+                        $stg_key
+                    ],
+                    'type' => 'stdio'
+                ],
+                'hp_orders_stg' => [
+                    'command' => 'node',
+                    'args' => [
+                        'C:\\DEV\\hp-mcp-bridge.js',
+                        'https://env-holisticpeoplecom-hpdevplus.kinsta.cloud/wp-json/woocommerce/mcp?scope=orders',
+                        $stg_key
+                    ],
+                    'type' => 'stdio'
+                ],
+                'hp_funnels_stg' => [
+                    'command' => 'node',
+                    'args' => [
+                        'C:\\DEV\\hp-mcp-bridge.js',
+                        'https://env-holisticpeoplecom-hpdevplus.kinsta.cloud/wp-json/woocommerce/mcp?scope=funnels',
+                        $stg_key
+                    ],
+                    'type' => 'stdio'
+                ],
+                'hp_economics_stg' => [
+                    'command' => 'node',
+                    'args' => [
+                        'C:\\DEV\\hp-mcp-bridge.js',
+                        'https://env-holisticpeoplecom-hpdevplus.kinsta.cloud/wp-json/woocommerce/mcp?scope=economics',
+                        $stg_key
+                    ],
+                    'type' => 'stdio'
+                ]
+            ]
+        ];
+
+        // Production Config
+        $prod_config = [
+            'mcpServers' => [
+                'hp_products_prod' => [
+                    'command' => 'node',
+                    'args' => [
+                        'C:\\DEV\\hp-mcp-bridge.js',
+                        'https://holisticpeople.com/wp-json/woocommerce/mcp?scope=products',
+                        $prod_key
+                    ],
+                    'type' => 'stdio'
+                ],
+                'hp_orders_prod' => [
+                    'command' => 'node',
+                    'args' => [
+                        'C:\\DEV\\hp-mcp-bridge.js',
+                        'https://holisticpeople.com/wp-json/woocommerce/mcp?scope=orders',
+                        $prod_key
+                    ],
+                    'type' => 'stdio'
+                ],
+                'hp_funnels_prod' => [
+                    'command' => 'node',
+                    'args' => [
+                        'C:\\DEV\\hp-mcp-bridge.js',
+                        'https://holisticpeople.com/wp-json/woocommerce/mcp?scope=funnels',
+                        $prod_key
+                    ],
+                    'type' => 'stdio'
+                ],
+                'hp_economics_prod' => [
+                    'command' => 'node',
+                    'args' => [
+                        'C:\\DEV\\hp-mcp-bridge.js',
+                        'https://holisticpeople.com/wp-json/woocommerce/mcp?scope=economics',
+                        $prod_key
+                    ],
+                    'type' => 'stdio'
+                ]
+            ]
+        ];
         ?>
         <div class="wrap">
             <h1><?php echo esc_html__('HP Abilities', 'hp-abilities'); ?> <span style="font-size: 0.5em; vertical-align: middle; background: #eee; padding: 2px 8px; border-radius: 4px;">v<?php echo esc_html(HP_ABILITIES_VERSION); ?></span></h1>
             
-            <div class="card">
-                <h2><?php echo esc_html__('Status', 'hp-abilities'); ?></h2>
-                <p>
-                    <strong><?php echo esc_html__('Abilities API:', 'hp-abilities'); ?></strong>
-                    <?php if ($abilities_available): ?>
-                        <span style="color: green;">✔ <?php echo esc_html__('Available', 'hp-abilities'); ?></span>
-                    <?php else: ?>
-                        <span style="color: orange;">⚠ <?php echo esc_html__('Not available (requires WordPress 6.9+)', 'hp-abilities'); ?></span>
-                    <?php endif; ?>
-                </p>
-                <p>
-                    <strong><?php echo esc_html__('HP-React-Widgets:', 'hp-abilities'); ?></strong>
-                    <?php if ($hp_rw_active): ?>
-                        <span style="color: green;">✔ <?php echo esc_html__('Active', 'hp-abilities'); ?></span>
-                    <?php else: ?>
-                        <span style="color: #d63638;">✘ <?php echo esc_html__('Inactive (Required for Funnel/Economics abilities)', 'hp-abilities'); ?></span>
-                    <?php endif; ?>
-                </p>
-            </div>
+            <form method="post" action="options.php">
+                <?php settings_fields('hp_abilities_settings'); ?>
+                
+                <div class="card">
+                    <h2><?php echo esc_html__('Status', 'hp-abilities'); ?></h2>
+                    <p>
+                        <strong><?php echo esc_html__('Abilities API:', 'hp-abilities'); ?></strong>
+                        <?php if ($abilities_available): ?>
+                            <span style="color: green;">✔ <?php echo esc_html__('Available', 'hp-abilities'); ?></span>
+                        <?php else: ?>
+                            <span style="color: orange;">⚠ <?php echo esc_html__('Not available (requires WordPress 6.9+)', 'hp-abilities'); ?></span>
+                        <?php endif; ?>
+                    </p>
+                    <p>
+                        <strong><?php echo esc_html__('HP-React-Widgets:', 'hp-abilities'); ?></strong>
+                        <?php if ($hp_rw_active): ?>
+                            <span style="color: green;">✔ <?php echo esc_html__('Active', 'hp-abilities'); ?></span>
+                        <?php else: ?>
+                            <span style="color: #d63638;">✘ <?php echo esc_html__('Inactive (Required for Funnel/Economics abilities)', 'hp-abilities'); ?></span>
+                        <?php endif; ?>
+                    </p>
+                </div>
+
+                <div class="card" style="margin-top: 20px;">
+                    <h2><?php echo esc_html__('WooCommerce API Credentials', 'hp-abilities'); ?></h2>
+                    <p><?php echo esc_html__('Enter your WooCommerce Consumer Key and Secret for Staging and Production. These are used to generate the Cursor configuration snippets below.', 'hp-abilities'); ?></p>
+                    
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row"><label for="hp_abilities_stg_ck"><?php echo esc_html__('Staging Consumer Key', 'hp-abilities'); ?></label></th>
+                            <td><input name="hp_abilities_stg_ck" type="text" id="hp_abilities_stg_ck" value="<?php echo esc_attr($stg_ck); ?>" class="regular-text" placeholder="ck_..."></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="hp_abilities_stg_cs"><?php echo esc_html__('Staging Consumer Secret', 'hp-abilities'); ?></label></th>
+                            <td><input name="hp_abilities_stg_cs" type="password" id="hp_abilities_stg_cs" value="<?php echo esc_attr($stg_cs); ?>" class="regular-text" placeholder="cs_..."></td>
+                        </tr>
+                        <tr><td colspan="2"><hr></td></tr>
+                        <tr>
+                            <th scope="row"><label for="hp_abilities_prod_ck"><?php echo esc_html__('Production Consumer Key', 'hp-abilities'); ?></label></th>
+                            <td><input name="hp_abilities_prod_ck" type="text" id="hp_abilities_prod_ck" value="<?php echo esc_attr($prod_ck); ?>" class="regular-text" placeholder="ck_..."></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><label for="hp_abilities_prod_cs"><?php echo esc_html__('Production Consumer Secret', 'hp-abilities'); ?></label></th>
+                            <td><input name="hp_abilities_prod_cs" type="password" id="hp_abilities_prod_cs" value="<?php echo esc_attr($prod_cs); ?>" class="regular-text" placeholder="cs_..."></td>
+                        </tr>
+                    </table>
+                    <?php submit_button(); ?>
+                </div>
+            </form>
 
             <?php if ($hp_rw_active): ?>
             <div class="card" style="margin-top: 20px; border-left: 4px solid #72aee6;">
                 <h2><?php echo esc_html__('AI Configuration', 'hp-abilities'); ?></h2>
                 <p><?php echo esc_html__('Configure economic guidelines and version control settings for AI funnel creation.', 'hp-abilities'); ?></p>
                 <p>
-                    <a href="<?php echo esc_url(admin_url('edit.php?post_type=hp-funnel&page=hp-funnel-ai-settings')); ?>" class="button button-primary">
+                    <a href="<?php echo esc_url(admin_url('edit.php?post_type=hp-funnel&page=hp-funnel-ai-settings')); ?>" class="button button-secondary">
                         <?php echo esc_html__('Go to AI Settings', 'hp-abilities'); ?>
                     </a>
                 </p>
@@ -715,52 +862,44 @@ class Plugin
             <?php endif; ?>
 
             <div class="card" style="margin-top: 20px;">
-                <h2><?php echo esc_html__('MCP Configuration', 'hp-abilities'); ?></h2>
-                <p><?php echo esc_html__('To use these tools in Cursor IDE on another machine, add the following to your %USERPROFILE%\.cursor\mcp.json file:', 'hp-abilities'); ?></p>
-                <textarea readonly style="width: 100%; height: 300px; font-family: monospace; background: #f0f0f0; padding: 10px; border: 1px solid #ccc;"><?php 
-                $mcp_config = [
-                    'mcpServers' => [
-                        'hp_products' => [
-                            'command' => 'node',
-                            'args' => [
-                                'C:\\DEV\\hp-mcp-bridge.js',
-                                site_url('/wp-json/woocommerce/mcp?scope=products'),
-                                'YOUR_API_KEY_HERE'
-                            ],
-                            'type' => 'stdio'
-                        ],
-                        'hp_orders' => [
-                            'command' => 'node',
-                            'args' => [
-                                'C:\\DEV\\hp-mcp-bridge.js',
-                                site_url('/wp-json/woocommerce/mcp?scope=orders'),
-                                'YOUR_API_KEY_HERE'
-                            ],
-                            'type' => 'stdio'
-                        ],
-                        'hp_funnels' => [
-                            'command' => 'node',
-                            'args' => [
-                                'C:\\DEV\\hp-mcp-bridge.js',
-                                site_url('/wp-json/woocommerce/mcp?scope=funnels'),
-                                'YOUR_API_KEY_HERE'
-                            ],
-                            'type' => 'stdio'
-                        ],
-                        'hp_economics' => [
-                            'command' => 'node',
-                            'args' => [
-                                'C:\\DEV\\hp-mcp-bridge.js',
-                                site_url('/wp-json/woocommerce/mcp?scope=economics'),
-                                'YOUR_API_KEY_HERE'
-                            ],
-                            'type' => 'stdio'
-                        ]
-                    ]
-                ];
-                echo esc_textarea(json_encode($mcp_config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-                ?></textarea>
-                <p class="description"><?php echo esc_html__('Note: Replace YOUR_API_KEY_HERE with your WooCommerce Consumer Key and Secret joined by a colon (e.g., ck_...:cs_...).', 'hp-abilities'); ?></p>
+                <h2><?php echo esc_html__('Cursor Configuration Snippets', 'hp-abilities'); ?></h2>
+                <p><?php echo esc_html__('Copy these snippets into your %USERPROFILE%\.cursor\mcp.json file. They include the API keys saved above.', 'hp-abilities'); ?></p>
+                
+                <div style="display: flex; gap: 20px; margin-top: 15px;">
+                    <div style="flex: 1;">
+                        <h3><?php echo esc_html__('Staging Environment', 'hp-abilities'); ?></h3>
+                        <div style="position: relative;">
+                            <textarea id="stg_mcp_snippet" readonly style="width: 100%; height: 250px; font-family: monospace; background: #f9f9f9; padding: 10px; border: 1px solid #ccc;"><?php 
+                            echo esc_textarea(json_encode($stg_config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                            ?></textarea>
+                            <button class="button button-small" style="position: absolute; top: 10px; right: 10px;" onclick="copyToClipboard('stg_mcp_snippet', this)">Copy</button>
+                        </div>
+                    </div>
+                    <div style="flex: 1;">
+                        <h3><?php echo esc_html__('Production Environment', 'hp-abilities'); ?></h3>
+                        <div style="position: relative;">
+                            <textarea id="prod_mcp_snippet" readonly style="width: 100%; height: 250px; font-family: monospace; background: #f9f9f9; padding: 10px; border: 1px solid #ccc;"><?php 
+                            echo esc_textarea(json_encode($prod_config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                            ?></textarea>
+                            <button class="button button-small" style="position: absolute; top: 10px; right: 10px;" onclick="copyToClipboard('prod_mcp_snippet', this)">Copy</button>
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                function copyToClipboard(elementId, btn) {
+                    var copyText = document.getElementById(elementId);
+                    copyText.select();
+                    copyText.setSelectionRange(0, 99999);
+                    navigator.clipboard.writeText(copyText.value);
+                    
+                    var originalText = btn.innerText;
+                    btn.innerText = 'Copied!';
+                    setTimeout(function() {
+                        btn.innerText = originalText;
+                    }, 2000);
+                }
+                </script>
             </div>
 
             <div class="card" style="margin-top: 20px;">
