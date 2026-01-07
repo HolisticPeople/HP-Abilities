@@ -40,44 +40,44 @@ class GMCFixer
      */
     public static function inject_raw_gmc_schema(): void
     {
-        if (!is_singular('product')) return;
+        // If we are on a product page, inject the schema
+        if (is_product() || is_singular('product')) {
+            $product = wc_get_product(get_the_ID());
+            if (!$product) return;
 
-        $product = wc_get_product(get_the_ID());
-        if (!$product) return;
-
-        $unit = get_option('woocommerce_weight_unit', 'lb');
-        $weight = $product->get_weight();
-        
-        $data = [
-            '@context' => 'https://schema.org/',
-            '@type' => 'Product',
-            'name' => $product->get_name(),
-            'sku' => $product->get_sku(),
-            'description' => wp_strip_all_tags($product->get_short_description() ?: $product->get_description()),
-            'image' => get_the_post_thumbnail_url($product->get_id(), 'full'),
-            'brand' => [
-                '@type' => 'Brand',
-                'name' => 'HolisticPeople'
-            ],
-            'offers' => [
-                '@type' => 'Offer',
-                'price' => number_format((float)$product->get_price(), 2, '.', ''),
-                'priceCurrency' => get_woocommerce_currency(),
-                'availability' => 'https://schema.org/' . ($product->is_in_stock() ? 'InStock' : 'OutOfStock'),
-                'url' => get_permalink($product->get_id())
-            ]
-        ];
-
-        if ($weight) {
-            $data['weight'] = [
-                '@type' => 'QuantitativeValue',
-                'value' => $weight,
-                'unitText' => $unit
+            $unit = get_option('woocommerce_weight_unit', 'lb');
+            $weight = $product->get_weight();
+            
+            $data = [
+                '@context' => 'https://schema.org/',
+                '@type' => 'Product',
+                'name' => $product->get_name(),
+                'sku' => $product->get_sku(),
+                'description' => wp_strip_all_tags($product->get_short_description() ?: $product->get_description()),
+                'image' => get_the_post_thumbnail_url($product->get_id(), 'full'),
+                'brand' => [
+                    '@type' => 'Brand',
+                    'name' => 'HolisticPeople'
+                ],
+                'offers' => [
+                    '@type' => 'Offer',
+                    'price' => number_format((float)$product->get_price(), 2, '.', ''),
+                    'priceCurrency' => get_woocommerce_currency(),
+                    'availability' => 'https://schema.org/' . ($product->is_in_stock() ? 'InStock' : 'OutOfStock'),
+                    'url' => get_permalink($product->get_id())
+                ]
             ];
-        }
 
-        echo "\n<!-- HP GMC Compliance Bridge -->\n";
-        echo '<script type="application/ld+json">' . wp_json_encode($data) . '</script>' . "\n";
+            if ($weight) {
+                $data['weight'] = [
+                    '@type' => 'QuantitativeValue',
+                    'value' => $weight,
+                    'unitText' => $unit
+                ];
+            }
+
+            echo "\n<!-- HP GMC Compliance Bridge -->\n";
+            echo '<script type="application/ld+json">' . wp_json_encode($data) . '</script>' . "\n";
+        }
     }
 }
-
