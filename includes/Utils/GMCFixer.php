@@ -19,8 +19,8 @@ class GMCFixer
         // 1. Map WooCommerce weight to GMC shipping_weight in "Google Listings & Ads" plugin
         add_filter('woocommerce_gla_product_attribute_value_shipping_weight', [self::class, 'map_shipping_weight'], 10, 2);
 
-        // 2. Add raw schema to footer as a failsafe if Yoast is failing
-        add_action('wp_footer', [self::class, 'inject_raw_gmc_schema'], 99);
+        // 2. Add raw schema to head as a failsafe
+        add_action('wp_head', [self::class, 'inject_raw_gmc_schema'], 1);
     }
 
     /**
