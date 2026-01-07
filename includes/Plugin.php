@@ -35,11 +35,147 @@ class Plugin
             self::register_ability_categories();
         }
 
-        // Register settings page
+        // Register settings page and settings
         add_action('admin_menu', [self::class, 'register_settings_page']);
+        add_action('admin_init', [self::class, 'register_plugin_settings']);
+
+        // AJAX handlers
+        add_action('wp_ajax_hp_toggle_ability', [self::class, 'ajax_toggle_ability']);
+        add_action('wp_ajax_hp_check_tool_health', [self::class, 'ajax_check_tool_health']);
 
         // Hook into WooCommerce MCP to include HP abilities
         add_filter('woocommerce_mcp_include_ability', [self::class, 'include_hp_abilities_in_wc_mcp'], 10, 2);
+    }
+
+    /**
+     * Get all registered HP abilities from the global registry.
+     */
+    public static function get_registered_hp_abilities(): array
+    {
+        if (!class_exists('\WP_Abilities_Registry')) {
+            return [];
+        }
+
+        $registry = \WP_Abilities_Registry::get_instance();
+        $all_abilities = $registry->get_all_registered();
+        $hp_abilities = [];
+
+        foreach ($all_abilities as $id => $ability) {
+            if (strpos($id, 'hp-abilities/') === 0) {
+                $hp_abilities[$id] = $ability;
+            }
+        }
+
+        return $hp_abilities;
+    }
+
+    /**
+     * AJAX handler to toggle ability state.
+     */
+    public static function ajax_toggle_ability(): void
+    {
+        check_ajax_referer('hp_abilities_toggle', 'nonce');
+        
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error('Unauthorized');
+        }
+
+        $ability_id = sanitize_text_field($_POST['ability_id'] ?? '');
+        $enabled = (bool)($_POST['enabled'] ?? false);
+
+        if (empty($ability_id)) {
+            wp_send_json_error('Missing ability ID');
+        }
+
+        $disabled_list = get_option('hp_abilities_disabled_list', []);
+        
+        if ($enabled) {
+            $disabled_list = array_diff($disabled_list, [$ability_id]);
+        } else {
+            if (!in_array($ability_id, $disabled_list)) {
+                $disabled_list[] = $ability_id;
+            }
+        }
+
+        update_option('hp_abilities_disabled_list', array_values($disabled_list));
+        wp_send_json_success(['ability_id' => $ability_id, 'enabled' => $enabled]);
+    }
+
+    /**
+     * AJAX handler to check tool health.
+     */
+    public static function ajax_check_tool_health(): void
+    {
+        check_ajax_referer('hp_abilities_health', 'nonce');
+
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error('Unauthorized');
+        }
+
+        $ability_id = sanitize_text_field($_POST['ability_id'] ?? '');
+        if (empty($ability_id)) {
+            wp_send_json_error('Missing ability ID');
+        }
+
+        $registry = \WP_Abilities_Registry::get_instance();
+        $ability = $registry->get_registered($ability_id);
+
+        if (!$ability) {
+            wp_send_json_error('Ability not found');
+        }
+
+        $health = [
+            'status' => 'ok',
+            'message' => 'Active',
+            'details' => []
+        ];
+
+        // 1. Check callback using reflection for protected property
+        $reflection = new \ReflectionClass($ability);
+        $callback_prop = $reflection->getProperty('execute_callback');
+        $callback_prop->setAccessible(true);
+        $callback = $callback_prop->getValue($ability);
+
+        if (!is_callable($callback)) {
+            $health['status'] = 'error';
+            $health['message'] = 'Broken';
+            $health['details'][] = 'Callback not callable';
+        }
+
+        // 2. Check dependency classes (HP_RW)
+        if (is_array($callback) && is_string($callback[0])) {
+            $class = $callback[0];
+            if (!class_exists($class)) {
+                $health['status'] = 'error';
+                $health['message'] = 'Missing Deps';
+                $health['details'][] = "Class $class not found";
+            }
+        }
+
+        wp_send_json_success($health);
+    }
+
+    /**
+     * Register plugin settings for API keys.
+     */
+    public static function register_plugin_settings(): void
+    {
+        register_setting('hp_abilities_settings', 'hp_abilities_stg_ck', [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ]);
+        register_setting('hp_abilities_settings', 'hp_abilities_stg_cs', [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ]);
+        register_setting('hp_abilities_settings', 'hp_abilities_prod_ck', [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ]);
+        register_setting('hp_abilities_settings', 'hp_abilities_prod_cs', [
+            'type'              => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+        ]);
     }
 
     /**
@@ -95,6 +231,12 @@ class Plugin
 
         if (!$is_hp && !$is_wc) {
             return $include;
+        }
+
+        // Check if explicitly disabled
+        $disabled_list = get_option('hp_abilities_disabled_list', []);
+        if (in_array($ability_id, $disabled_list)) {
+            return false;
         }
 
         $group = self::get_ability_group($ability_id);
@@ -674,7 +816,398 @@ class Plugin
         );
     }
 
-    public static function render_settings_page(): void {
-        echo '<div class="wrap"><h1>HP Abilities</h1><p>Version ' . HP_ABILITIES_VERSION . '</p></div>';
+    public static function render_settings_page(): void
+    {
+        $abilities_available = function_exists('wp_register_ability');
+        $hp_rw_active = class_exists('\HP_RW\Plugin');
+
+        // Fetch saved keys
+        $stg_ck = get_option('hp_abilities_stg_ck', '');
+        $stg_cs = get_option('hp_abilities_stg_cs', '');
+        $prod_ck = get_option('hp_abilities_prod_ck', '');
+        $prod_cs = get_option('hp_abilities_prod_cs', '');
+
+        $stg_key = ($stg_ck && $stg_cs) ? "{$stg_ck}:{$stg_cs}" : 'YOUR_STAGING_API_KEY_HERE';
+        $prod_key = ($prod_ck && $prod_cs) ? "{$prod_ck}:{$prod_cs}" : 'YOUR_PRODUCTION_API_KEY_HERE';
+
+        // Staging Config
+        $stg_config = [
+            'mcpServers' => [
+                'hp_products_stg' => [
+                    'command' => 'node',
+                    'args' => [
+                        'C:\\DEV\\hp-mcp-bridge.js',
+                        'https://env-holisticpeoplecom-hpdevplus.kinsta.cloud/wp-json/woocommerce/mcp?scope=products',
+                        $stg_key
+                    ],
+                    'type' => 'stdio'
+                ],
+                'hp_orders_stg' => [
+                    'command' => 'node',
+                    'args' => [
+                        'C:\\DEV\\hp-mcp-bridge.js',
+                        'https://env-holisticpeoplecom-hpdevplus.kinsta.cloud/wp-json/woocommerce/mcp?scope=orders',
+                        $stg_key
+                    ],
+                    'type' => 'stdio'
+                ],
+                'hp_funnels_stg' => [
+                    'command' => 'node',
+                    'args' => [
+                        'C:\\DEV\\hp-mcp-bridge.js',
+                        'https://env-holisticpeoplecom-hpdevplus.kinsta.cloud/wp-json/woocommerce/mcp?scope=funnels',
+                        $stg_key
+                    ],
+                    'type' => 'stdio'
+                ],
+                'hp_economics_stg' => [
+                    'command' => 'node',
+                    'args' => [
+                        'C:\\DEV\\hp-mcp-bridge.js',
+                        'https://env-holisticpeoplecom-hpdevplus.kinsta.cloud/wp-json/woocommerce/mcp?scope=economics',
+                        $stg_key
+                    ],
+                    'type' => 'stdio'
+                ]
+            ]
+        ];
+
+        // Production Config
+        $prod_config = [
+            'mcpServers' => [
+                'hp_products_prod' => [
+                    'command' => 'node',
+                    'args' => [
+                        'C:\\DEV\\hp-mcp-bridge.js',
+                        'https://holisticpeople.com/wp-json/woocommerce/mcp?scope=products',
+                        $prod_key
+                    ],
+                    'type' => 'stdio'
+                ],
+                'hp_orders_prod' => [
+                    'command' => 'node',
+                    'args' => [
+                        'C:\\DEV\\hp-mcp-bridge.js',
+                        'https://holisticpeople.com/wp-json/woocommerce/mcp?scope=orders',
+                        $prod_key
+                    ],
+                    'type' => 'stdio'
+                ],
+                'hp_funnels_prod' => [
+                    'command' => 'node',
+                    'args' => [
+                        'C:\\DEV\\hp-mcp-bridge.js',
+                        'https://holisticpeople.com/wp-json/woocommerce/mcp?scope=funnels',
+                        $prod_key
+                    ],
+                    'type' => 'stdio'
+                ],
+                'hp_economics_prod' => [
+                    'command' => 'node',
+                    'args' => [
+                        'C:\\DEV\\hp-mcp-bridge.js',
+                        'https://holisticpeople.com/wp-json/woocommerce/mcp?scope=economics',
+                        $prod_key
+                    ],
+                    'type' => 'stdio'
+                ]
+            ]
+        ];
+
+        // Dynamic Discovery
+        $hp_abilities = self::get_registered_hp_abilities();
+        $disabled_list = get_option('hp_abilities_disabled_list', []);
+        
+        // Group abilities
+        $groups = [
+            'products'  => ['label' => 'Products & Inventory', 'tools' => []],
+            'orders'    => ['label' => 'Orders & Customers', 'tools' => []],
+            'funnels'   => ['label' => 'Funnels & SEO', 'tools' => []],
+            'economics' => ['label' => 'Economics & Profitability', 'tools' => []],
+            'all'       => ['label' => 'Uncategorized', 'tools' => []],
+        ];
+
+        foreach ($hp_abilities as $id => $ability) {
+            $group_key = self::get_ability_group($id);
+            if (!isset($groups[$group_key])) $group_key = 'all';
+            $groups[$group_key]['tools'][$id] = $ability;
+        }
+
+        $toggle_nonce = wp_create_nonce('hp_abilities_toggle');
+        $health_nonce = wp_create_nonce('hp_abilities_health');
+        ?>
+        <div class="wrap">
+            <h1><?php echo esc_html__('HP Abilities Management Hub', 'hp-abilities'); ?> <span style="font-size: 0.5em; vertical-align: middle; background: #eee; padding: 2px 8px; border-radius: 4px;">v<?php echo esc_html(HP_ABILITIES_VERSION); ?></span></h1>
+            
+            <div style="display: flex; gap: 20px; align-items: flex-start;">
+                <!-- Left Column: Management & Credentials -->
+                <div style="flex: 2; min-width: 500px;">
+                    <form method="post" action="options.php">
+                        <?php settings_fields('hp_abilities_settings'); ?>
+                        
+                        <div class="card" style="margin-top: 0; max-width: none;">
+                            <h2><?php echo esc_html__('Credentials & Settings', 'hp-abilities'); ?></h2>
+                            <table class="form-table">
+                                <tr>
+                                    <th scope="row" style="width: 150px;"><label for="hp_abilities_stg_ck"><?php echo esc_html__('Staging CK', 'hp-abilities'); ?></label></th>
+                                    <td><input name="hp_abilities_stg_ck" type="text" id="hp_abilities_stg_ck" value="<?php echo esc_attr($stg_ck); ?>" class="regular-text" style="width: 100%;" placeholder="ck_..."></td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="hp_abilities_stg_cs"><?php echo esc_html__('Staging CS', 'hp-abilities'); ?></label></th>
+                                    <td><input name="hp_abilities_stg_cs" type="password" id="hp_abilities_stg_cs" value="<?php echo esc_attr($stg_cs); ?>" class="regular-text" style="width: 100%;" placeholder="cs_..."></td>
+                                </tr>
+                                <tr><td colspan="2"><hr></td></tr>
+                                <tr>
+                                    <th scope="row"><label for="hp_abilities_prod_ck"><?php echo esc_html__('Prod CK', 'hp-abilities'); ?></label></th>
+                                    <td><input name="hp_abilities_prod_ck" type="text" id="hp_abilities_prod_ck" value="<?php echo esc_attr($prod_ck); ?>" class="regular-text" style="width: 100%;" placeholder="ck_..."></td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="hp_abilities_prod_cs"><?php echo esc_html__('Prod CS', 'hp-abilities'); ?></label></th>
+                                    <td><input name="hp_abilities_prod_cs" type="password" id="hp_abilities_prod_cs" value="<?php echo esc_attr($prod_cs); ?>" class="regular-text" style="width: 100%;" placeholder="cs_..."></td>
+                                </tr>
+                            </table>
+                            <?php submit_button(); ?>
+                        </div>
+                    </form>
+
+                    <!-- Dynamic Tool List -->
+                    <div class="card" style="margin-top: 20px; max-width: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <h2><?php echo esc_html__('Registered Abilities', 'hp-abilities'); ?></h2>
+                        </div>
+                        <p><?php echo esc_html__('Manage and monitor all HP Abilities registered in the system.', 'hp-abilities'); ?></p>
+
+                        <?php foreach ($groups as $group_id => $group): 
+                            if (empty($group['tools'])) continue;
+                            $count = count($group['tools']);
+                        ?>
+                            <div style="margin-top: 20px;">
+                                <div style="background: #f0f0f1; padding: 8px 12px; border-radius: 4px; border-left: 4px solid #2271b1; display: flex; justify-content: space-between; align-items: center;">
+                                    <h3 style="margin: 0;"><?php echo esc_html($group['label']); ?> (<?php echo (int)$count; ?>)</h3>
+                                    <div style="display: flex; gap: 10px;">
+                                        <button type="button" class="button button-small" onclick="checkGroupHealth('<?php echo esc_js($group_id); ?>')"><?php echo esc_html__('Check Group Health', 'hp-abilities'); ?></button>
+                                        <button type="button" class="button button-small" onclick="toggleGroup('<?php echo esc_js($group_id); ?>', true)"><?php echo esc_html__('Enable All', 'hp-abilities'); ?></button>
+                                        <button type="button" class="button button-small" onclick="toggleGroup('<?php echo esc_js($group_id); ?>', false)"><?php echo esc_html__('Disable All', 'hp-abilities'); ?></button>
+                                    </div>
+                                </div>
+                                <table class="widefat fixed striped" id="table-<?php echo esc_attr($group_id); ?>">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 30px;"><input type="checkbox" readonly checked disabled></th>
+                                            <th><?php echo esc_html__('Tool ID', 'hp-abilities'); ?></th>
+                                            <th style="width: 80px; text-align: center;"><?php echo esc_html__('Status', 'hp-abilities'); ?></th>
+                                            <th style="width: 80px; text-align: center;"><?php echo esc_html__('Health', 'hp-abilities'); ?></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($group['tools'] as $id => $ability): 
+                                            $is_enabled = !in_array($id, $disabled_list);
+                                        ?>
+                                            <tr id="row-<?php echo esc_attr(sanitize_title($id)); ?>">
+                                                <td>
+                                                    <input type="checkbox" 
+                                                           onchange="toggleAbility('<?php echo esc_js($id); ?>', this.checked)" 
+                                                           <?php checked($is_enabled); ?>>
+                                                </td>
+                                                <td>
+                                                    <strong><code><?php echo esc_html($id); ?></code></strong>
+                                                    <div style="font-size: 11px; color: #666;"><?php echo esc_html($ability->get_description()); ?></div>
+                                                </td>
+                                                <td style="text-align: center;">
+                                                    <span class="status-badge <?php echo $is_enabled ? 'enabled' : 'disabled'; ?>" id="status-<?php echo esc_attr(sanitize_title($id)); ?>">
+                                                        <?php echo $is_enabled ? 'Active' : 'Muted'; ?>
+                                                    </span>
+                                                </td>
+                                                <td style="text-align: center;">
+                                                    <span class="health-indicator" id="health-<?php echo esc_attr(sanitize_title($id)); ?>" title="Click to verify">
+                                                        <span class="dashicons dashicons-marker" style="color: #ccc; cursor: pointer;" onclick="checkHealth('<?php echo esc_js($id); ?>')"></span>
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
+                <!-- Right Column: Snippets & Documentation -->
+                <div style="flex: 1.2; min-width: 450px;">
+                    <div class="card" style="margin-top: 0; max-width: none;">
+                        <h2><?php echo esc_html__('Cursor Configuration', 'hp-abilities'); ?></h2>
+                        <div style="margin-top: 15px;">
+                            <h3 style="margin-bottom: 5px;"><?php echo esc_html__('Staging mcp.json', 'hp-abilities'); ?></h3>
+                            <div style="position: relative;">
+                                <textarea id="stg_mcp_snippet" readonly style="width: 100%; height: 160px; font-family: monospace; background: #f9f9f9; padding: 10px; border: 1px solid #ccc; font-size: 11px;"><?php 
+                                echo esc_textarea(json_encode($stg_config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                                ?></textarea>
+                                <button class="button button-small" style="position: absolute; top: 10px; right: 10px;" onclick="copyToClipboard('stg_mcp_snippet', this)">Copy</button>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 20px;">
+                            <h3 style="margin-bottom: 5px;"><?php echo esc_html__('Production mcp.json', 'hp-abilities'); ?></h3>
+                            <div style="position: relative;">
+                                <textarea id="prod_mcp_snippet" readonly style="width: 100%; height: 160px; font-family: monospace; background: #f9f9f9; padding: 10px; border: 1px solid #ccc; font-size: 11px;"><?php 
+                                echo esc_textarea(json_encode($prod_config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                                ?></textarea>
+                                <button class="button button-small" style="position: absolute; top: 10px; right: 10px;" onclick="copyToClipboard('prod_mcp_snippet', this)">Copy</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="margin-top: 20px; max-width: none; border-top: 4px solid #2271b1;">
+                        <h2><?php echo esc_html__('Master Protocol', 'hp-abilities'); ?></h2>
+                        <p><?php echo esc_html__('Copy this rule into your workspace to guide AI agents in developing new tools.', 'hp-abilities'); ?></p>
+                        <div style="position: relative;">
+                            <textarea id="protocol_snippet" readonly style="width: 100%; height: 350px; font-family: monospace; background: #f9f9f9; padding: 10px; border: 1px solid #ccc; font-size: 11px;"><?php 
+                            echo esc_textarea(self::get_protocol_rule_text());
+                            ?></textarea>
+                            <button class="button button-small" style="position: absolute; top: 10px; right: 10px;" onclick="copyToClipboard('protocol_snippet', this)">Copy</button>
+                        </div>
+                    </div>
+
+                    <?php if ($hp_rw_active): ?>
+                    <div class="card" style="margin-top: 20px; border-left: 4px solid #72aee6; max-width: none;">
+                        <h2><?php echo esc_html__('AI Configuration', 'hp-abilities'); ?></h2>
+                        <p><?php echo esc_html__('Configure economic guidelines and version control.', 'hp-abilities'); ?></p>
+                        <p>
+                            <a href="<?php echo esc_url(admin_url('edit.php?post_type=hp-funnel&page=hp-funnel-ai-settings')); ?>" class="button button-secondary">
+                                <?php echo esc_html__('Go to AI Settings', 'hp-abilities'); ?>
+                            </a>
+                        </p>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <style>
+                .status-badge { padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+                .status-badge.enabled { background: #e7f6ed; color: #207b4d; }
+                .status-badge.disabled { background: #fcf0f1; color: #d63638; }
+                .health-indicator .dashicons { font-size: 20px; }
+                .health-indicator.ok { color: #207b4d; }
+                .health-indicator.error { color: #d63638; }
+            </style>
+
+            <script>
+            function copyToClipboard(elementId, btn) {
+                var copyText = document.getElementById(elementId);
+                copyText.select();
+                copyText.setSelectionRange(0, 99999);
+                navigator.clipboard.writeText(copyText.value);
+                
+                var originalText = btn.innerText;
+                btn.innerText = 'Copied!';
+                setTimeout(function() { btn.innerText = originalText; }, 2000);
+            }
+
+            function toggleAbility(abilityId, enabled) {
+                const badge = document.getElementById('status-' + abilityId.replace(/[\/\s]/g, '-').toLowerCase());
+                
+                jQuery.post(ajaxurl, {
+                    action: 'hp_toggle_ability',
+                    ability_id: abilityId,
+                    enabled: enabled ? 1 : 0,
+                    nonce: '<?php echo $toggle_nonce; ?>'
+                }, function(response) {
+                    if (response.success) {
+                        if (enabled) {
+                            badge.innerText = 'Active';
+                            badge.classList.remove('disabled');
+                            badge.classList.add('enabled');
+                        } else {
+                            badge.innerText = 'Muted';
+                            badge.classList.remove('enabled');
+                            badge.classList.add('disabled');
+                        }
+                    } else {
+                        alert('Error: ' + response.data);
+                    }
+                });
+            }
+
+            function checkHealth(abilityId) {
+                const indicator = document.getElementById('health-' + abilityId.replace(/[\/\s]/g, '-').toLowerCase());
+                indicator.innerHTML = '<span class="dashicons dashicons-update spin" style="color: #2271b1;"></span>';
+                
+                jQuery.post(ajaxurl, {
+                    action: 'hp_check_tool_health',
+                    ability_id: abilityId,
+                    nonce: '<?php echo $health_nonce; ?>'
+                }, function(response) {
+                    if (response.success && response.data.status === 'ok') {
+                        indicator.innerHTML = '<span class="dashicons dashicons-yes-alt" style="color: #207b4d;" title="Active"></span>';
+                    } else {
+                        const msg = response.data ? response.data.message : 'Error';
+                        indicator.innerHTML = '<span class="dashicons dashicons-warning" style="color: #d63638;" title="' + msg + '"></span>';
+                    }
+                });
+            }
+
+            function toggleGroup(groupId, enabled) {
+                const table = document.getElementById('table-' + groupId);
+                const checkboxes = table.querySelectorAll('tbody input[type="checkbox"]');
+                checkboxes.forEach(cb => {
+                    if (cb.checked !== enabled) {
+                        cb.checked = enabled;
+                        cb.dispatchEvent(new Event('change'));
+                    }
+                });
+            }
+
+            function checkGroupHealth(groupId) {
+                const table = document.getElementById('table-' + groupId);
+                const rows = table.querySelectorAll('tbody tr');
+                rows.forEach(row => {
+                    const toolId = row.querySelector('strong code').innerText;
+                    checkHealth(toolId);
+                });
+            }
+
+            // Inline CSS for spin animation
+            const style = document.createElement('style');
+            style.innerHTML = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } .spin { animation: spin 2s linear infinite; }';
+            document.head.appendChild(style);
+            </script>
+        </div>
+        <?php
+    }
+
+    /**
+     * Get the master protocol rule text.
+     */
+    private static function get_protocol_rule_text(): string
+    {
+        return <<<EOD
+# MCP & Abilities Master Protocol
+
+## Overview
+This protocol ensures all AI agents maintain the "Self-Healing" HP Abilities ecosystem correctly.
+
+## 1. Tool Stewardship (Development)
+- **Namespace**: All custom tools MUST use the `hp-abilities/` prefix.
+- **Hook**: Register tools ONLY within the `wp_abilities_api_init` hook in `includes/Plugin.php`.
+- **Scoping**: Assign tools to a valid scope to ensure they appear in the correct MCP server:
+  - `hp-admin`: Store administration, products, orders.
+  - `hp-funnels`: Funnel configuration, building kits, protocols.
+  - `hp-seo`: SEO audits, JSON-LD schema.
+  - `hp-economics`: Profitability calculations, pricing rules.
+
+## 2. Implementation Standards
+- **Callbacks**: Use static methods in existing Ability classes (e.g., `FunnelApi::execute`).
+- **Input Validation**: Use standard JSON schema for `input_schema`. Ensure empty parameters are `(object)[]`.
+- **Dependencies**: Check if `HP_RW` service classes exist before execution.
+
+## 3. Deployment & Verification
+- **Auto-Discovery**: Do NOT manually update the settings page table; the plugin discovers tools dynamically.
+- **Health Check**: After adding a tool, you MUST click the "Check Health" button on the Settings page to verify connectivity.
+- **Kill-Switch**: Use the "Status" toggle to instantly mute tools if security or performance issues arise.
+
+## 4. MCP Server Sync
+- Use the generated snippets in `mcp.json` to ensure Cursor is using the `hp-mcp-bridge.js`.
+- Custom bridge handles authentication headers and BOM issues.
+EOD;
     }
 }
