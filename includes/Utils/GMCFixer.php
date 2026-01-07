@@ -19,8 +19,8 @@ class GMCFixer
         // 1. Map WooCommerce weight to GMC shipping_weight in "Google Listings & Ads" plugin
         add_filter('woocommerce_gla_product_attribute_value_shipping_weight', [self::class, 'map_shipping_weight'], 10, 2);
 
-        // 2. Add raw schema to footer as a failsafe (using high priority to avoid being stripped)
-        add_action('wp_footer', [self::class, 'inject_raw_gmc_schema'], 9999);
+        // 2. Add raw schema to product page (using a hook that's harder to strip)
+        add_action('woocommerce_after_single_product', [self::class, 'inject_raw_gmc_schema'], 99);
     }
 
     /**
@@ -40,11 +40,6 @@ class GMCFixer
      */
     public static function inject_raw_gmc_schema(): void
     {
-        // For production debugging
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('GMCFixer: inject_raw_gmc_schema called');
-        }
-
         // If we are on a product page, inject the schema
         if (is_product() || is_singular('product')) {
             $id = get_the_ID();
@@ -82,7 +77,7 @@ class GMCFixer
                 ];
             }
 
-            echo "\n<!-- HP GMC Compliance Bridge (Footer) -->\n";
+            echo "\n<!-- HP GMC Compliance Bridge (WC Hook) -->\n";
             echo '<script type="application/ld+json">' . wp_json_encode($data) . '</script>' . "\n";
         }
     }
