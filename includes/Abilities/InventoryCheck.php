@@ -18,7 +18,7 @@ class InventoryCheck
      */
     public static function execute(array $input): array
     {
-        $skus = $input['skus'] ?? [];
+        $skus = $input['skus'] ?? $input['sku'] ?? [];
         
         if (!is_array($skus)) {
             $skus = [$skus];
