@@ -12,34 +12,32 @@ if (!defined('ABSPATH')) {
 class GMCFixer
 {
     /**
-     * Initialize filters.
+     * Initialize filters and shortcodes.
      */
     public static function init(): void
     {
-        // #region agent log
-        if (function_exists('hp_agent_debug_log')) {
-            hp_agent_debug_log('V87', 'GMCFixer.php:20', 'GMCFixer::init() v0.8.7', [
-                'uri' => $_SERVER['REQUEST_URI'] ?? 'N/A'
-            ]);
-        }
-        // #endregion
-
-        // BYPASS TEST
-        if (isset($_GET['bypass_test'])) {
-            die("HP BYPASS TEST: GMCFixer is active.");
-        }
-
-        // 1. Map WooCommerce weight to GMC shipping_weight
+        // 1. Map WooCommerce weight to GMC shipping_weight in "Google Listings & Ads" plugin
         add_filter('woocommerce_gla_product_attribute_value_shipping_weight', [self::class, 'map_shipping_weight'], 10, 2);
 
-        // 2. Add raw schema to a reliable WooCommerce hook as a failsafe
+        // 2. Add raw schema to hooks as a failsafe
         add_action('woocommerce_after_single_product', [self::class, 'inject_raw_gmc_schema'], 1);
-        
-        // 3. Extra hook in the footer just in case WC hook is skipped
         add_action('wp_footer', [self::class, 'inject_raw_gmc_schema_footer'], 9999);
+
+        // 3. Register shortcode for Elementor templates
+        add_shortcode('hp_gmc_schema', [self::class, 'render_gmc_schema_shortcode']);
     }
 
-    public static function inject_raw_gmc_schema_footer()
+    /**
+     * Shortcode renderer for Elementor.
+     */
+    public static function render_gmc_schema_shortcode(): string
+    {
+        ob_start();
+        self::inject_raw_gmc_schema('SHORTCODE');
+        return ob_get_clean();
+    }
+
+    public static function inject_raw_gmc_schema_footer(): void
     {
         self::inject_raw_gmc_schema('FOOTER');
     }
@@ -57,63 +55,73 @@ class GMCFixer
     }
 
     /**
+     * Get the brand name from YITH Brands plugin taxonomy.
+     */
+    public static function get_product_brand(int $product_id): string
+    {
+        $terms = get_the_terms($product_id, 'yith_product_brand');
+        if (!empty($terms) && !is_wp_error($terms)) {
+            return $terms[0]->name;
+        }
+        
+        // Fallback to "product_brand" taxonomy which was also seen in list
+        $terms = get_the_terms($product_id, 'product_brand');
+        if (!empty($terms) && !is_wp_error($terms)) {
+            return $terms[0]->name;
+        }
+
+        return 'HolisticPeople'; // Final fallback
+    }
+
+    /**
      * Inject a dedicated GMC-compliant schema block.
      */
-    public static function inject_raw_gmc_schema($context = 'WC'): void
+    public static function inject_raw_gmc_schema(string $context = 'WC'): void
     {
-        $is_prod = is_product();
-        $is_sing = is_singular('product');
-
-        // #region agent log
-        if (function_exists('hp_agent_debug_log')) {
-            hp_agent_debug_log('V87', 'GMCFixer.php:68', 'inject_raw_gmc_schema check', [
-                'context' => $context,
-                'is_product' => $is_prod,
-                'is_singular' => $is_sing,
-                'post_id' => get_the_ID()
-            ]);
+        // Only on product pages
+        if (!is_product() && !is_singular('product')) {
+            return;
         }
-        // #endregion
 
-        // If we are on a product page, inject the schema
-        if ($is_prod || $is_sing) {
-            $id = get_the_ID();
-            $product = wc_get_product($id);
-            if (!$product) return;
+        $product_id = get_the_ID();
+        if (!$product_id) return;
 
-            $unit = get_option('woocommerce_weight_unit', 'lb');
-            $weight = $product->get_weight();
-            
-            $data = [
-                '@context' => 'https://schema.org/',
-                '@type' => 'Product',
-                'name' => $product->get_name(),
-                'sku' => $product->get_sku(),
-                'description' => wp_strip_all_tags($product->get_short_description() ?: $product->get_description()),
-                'image' => get_the_post_thumbnail_url($product->get_id(), 'full'),
-                'brand' => [
-                    '@type' => 'Brand',
-                    'name' => 'HolisticPeople'
-                ],
-                'offers' => [
-                    '@type' => 'Offer',
-                    'price' => number_format((float)$product->get_price(), 2, '.', ''),
-                    'priceCurrency' => get_woocommerce_currency(),
-                    'availability' => 'https://schema.org/' . ($product->is_in_stock() ? 'InStock' : 'OutOfStock'),
-                    'url' => get_permalink($product->get_id())
-                ]
+        $product = wc_get_product($product_id);
+        if (!$product) return;
+
+        $unit = get_option('woocommerce_weight_unit', 'lb');
+        $weight = $product->get_weight();
+        $brand_name = self::get_product_brand($product_id);
+        
+        $data = [
+            '@context' => 'https://schema.org/',
+            '@type' => 'Product',
+            'name' => $product->get_name(),
+            'sku' => $product->get_sku(),
+            'description' => wp_strip_all_tags($product->get_short_description() ?: $product->get_description()),
+            'image' => get_the_post_thumbnail_url($product->get_id(), 'full'),
+            'brand' => [
+                '@type' => 'Brand',
+                'name' => $brand_name
+            ],
+            'offers' => [
+                '@type' => 'Offer',
+                'price' => number_format((float)$product->get_price(), 2, '.', ''),
+                'priceCurrency' => get_woocommerce_currency(),
+                'availability' => 'https://schema.org/' . ($product->is_in_stock() ? 'InStock' : 'OutOfStock'),
+                'url' => get_permalink($product->get_id())
+            ]
+        ];
+
+        if ($weight) {
+            $data['weight'] = [
+                '@type' => 'QuantitativeValue',
+                'value' => $weight,
+                'unitText' => $unit
             ];
-
-            if ($weight) {
-                $data['weight'] = [
-                    '@type' => 'QuantitativeValue',
-                    'value' => $weight,
-                    'unitText' => $unit
-                ];
-            }
-
-            echo "\n<!-- HP GMC Compliance Bridge ({$context}) -->\n";
-            echo '<script type="application/ld+json">' . wp_json_encode($data) . '</script>' . "\n";
         }
+
+        echo "\n<!-- HP GMC Compliance Bridge ({$context}) -->\n";
+        echo '<script type="application/ld+json">' . wp_json_encode($data) . '</script>' . "\n";
     }
 }
