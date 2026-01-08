@@ -7,7 +7,7 @@ if (!defined('ABSPATH')) {
 
 /**
  * Handles automatic mapping of WooCommerce data to Google Merchant Center (GMC) requirements.
- * Focuses on filters for the "Google Listings & Ads" plugin and Yoast SEO.
+ * Focuses on filters for the "Google Listings & Ads" plugin and manual injection via shortcode.
  */
 class GMCFixer
 {
@@ -16,14 +16,10 @@ class GMCFixer
      */
     public static function init(): void
     {
-        // 1. Map WooCommerce weight to GMC shipping_weight in "Google Listings & Ads" plugin
+        // 1. Map WooCommerce weight to GMC shipping_weight in "Google Listings & Ads" plugin (Feed Fix)
         add_filter('woocommerce_gla_product_attribute_value_shipping_weight', [self::class, 'map_shipping_weight'], 10, 2);
 
-        // 2. Add raw schema to hooks as a failsafe
-        add_action('woocommerce_after_single_product', [self::class, 'inject_raw_gmc_schema'], 1);
-        add_action('wp_footer', [self::class, 'inject_raw_gmc_schema_footer'], 9999);
-
-        // 3. Register shortcode for Elementor templates
+        // 2. Register shortcode for Elementor templates (On-Page Fix)
         add_shortcode('hp_gmc_schema', [self::class, 'render_gmc_schema_shortcode']);
     }
 
@@ -37,13 +33,8 @@ class GMCFixer
         return ob_get_clean();
     }
 
-    public static function inject_raw_gmc_schema_footer(): void
-    {
-        self::inject_raw_gmc_schema('FOOTER');
-    }
-
     /**
-     * Map WC product weight to the GMC shipping_weight attribute.
+     * Map WC product weight to the GMC shipping_weight attribute for the feed.
      */
     public static function map_shipping_weight($value, \WC_Product $product)
     {
