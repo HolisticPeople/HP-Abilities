@@ -64,13 +64,12 @@ class GMCFixer
             return $terms[0]->name;
         }
         
-        // Fallback to "product_brand" taxonomy which was also seen in list
         $terms = get_the_terms($product_id, 'product_brand');
         if (!empty($terms) && !is_wp_error($terms)) {
             return $terms[0]->name;
         }
 
-        return 'HolisticPeople'; // Final fallback
+        return 'HolisticPeople';
     }
 
     /**
@@ -78,7 +77,6 @@ class GMCFixer
      */
     public static function inject_raw_gmc_schema(string $context = 'WC'): void
     {
-        // Only on product pages
         if (!is_product() && !is_singular('product')) {
             return;
         }
