@@ -2,22 +2,26 @@
  * Image Preparation Tool for HP Abilities
  * 
  * Performs:
- * 1. AI-powered background removal
- * 2. Alpha channel thresholding based on aggressiveness setting
- * 3. Professional resizing and centering on transparent canvas
- * 4. Output as optimized PNG
+ * 1. AI-powered background removal (isnet model for accuracy)
+ * 2. Gets raw alpha mask and applies our aggressiveness threshold
+ * 3. Uses mask to cut original image (preserves edge pixels)
+ * 4. Professional resizing and centering on transparent canvas
+ * 5. Optional: Upload to WordPress and set as product image
  * 
- * Usage: node bin/image-prep.js --url "http://..." --sku "DH515" --angle "front" [--sync]
+ * Usage:
+ *   node bin/image-prep.js --url "http://..." --sku "DH515" --angle "front" [--sync] [--upload --product-id 123]
  * 
- * With --sync: Fetches settings from WordPress via MCP before processing
- * Without --sync: Uses local defaults or command-line overrides
+ * Flags:
+ *   --sync       Fetch settings from WordPress before processing
+ *   --upload     Upload to WordPress after processing (requires --product-id)
+ *   --thumbnail  Set as featured image (default: true for 'front' angle)
  */
 
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const sharp = require('sharp');
-const { execSync, spawn } = require('child_process');
+const { execSync } = require('child_process');
 
 // Default configuration (can be overridden via --sync or CLI args)
 const DEFAULTS = {
@@ -27,145 +31,124 @@ const DEFAULTS = {
     naming: '{sku}-{angle}'
 };
 
+// Staging server configuration
+const SSH_CONFIG = {
+    host: '35.236.219.140',
+    port: 12872,
+    user: 'holisticpeoplecom',
+    key: 'C:\\Users\\user\\.ssh\\kinsta_staging_key',
+    remotePath: '/tmp'
+};
+
 const TEMP_DIR = path.join(process.cwd(), 'temp');
 
 /**
- * Fetch settings from WordPress via MCP bridge
+ * Fetch settings from WordPress via SSH (most reliable method)
  */
-async function fetchSettingsFromWP() {
-    return new Promise((resolve) => {
-        try {
-            // Read mcp.json to get bridge config
-            const mcpConfigPaths = [
-                path.join(process.env.APPDATA || '', 'Cursor', 'User', 'globalStorage', 'cursor.mcp', 'mcp.json'),
-                path.join(process.env.USERPROFILE || '', '.cursor', 'mcp.json'),
-                'C:\\Users\\user\\AppData\\Roaming\\Cursor\\User\\globalStorage\\cursor.mcp\\mcp.json'
-            ];
-            
-            let mcpConfig = null;
-            for (const p of mcpConfigPaths) {
-                if (fs.existsSync(p)) {
-                    mcpConfig = JSON.parse(fs.readFileSync(p, 'utf8'));
-                    break;
-                }
+function fetchSettingsFromWP() {
+    try {
+        console.error('Fetching settings from WordPress via SSH...');
+        
+        const getOption = (name) => {
+            const cmd = `ssh -i "${SSH_CONFIG.key}" -p ${SSH_CONFIG.port} ${SSH_CONFIG.user}@${SSH_CONFIG.host} "cd public && wp option get ${name} 2>/dev/null || echo ''"`;
+            try {
+                return execSync(cmd, { encoding: 'utf8' }).trim().split('\n').pop();
+            } catch (e) {
+                return '';
             }
-
-            if (!mcpConfig || !mcpConfig.mcpServers || !mcpConfig.mcpServers.hp_products_stg) {
-                console.error('Could not find MCP config, using defaults');
-                return resolve(null);
-            }
-
-            const serverConfig = mcpConfig.mcpServers.hp_products_stg;
-            const bridgePath = serverConfig.args[0];
-            const apiUrl = serverConfig.args[1];
-            const apiKey = serverConfig.args[2];
-
-            // Make direct HTTP request to WordPress MCP endpoint
-            const url = new URL(apiUrl);
-            const https = require('https');
-            
-            const payload = JSON.stringify({
-                jsonrpc: '2.0',
-                method: 'tools/call',
-                params: {
-                    name: 'hp-abilities/image-settings',
-                    arguments: { action: 'get' }
-                },
-                id: 1
-            });
-
-            const options = {
-                hostname: url.hostname,
-                port: 443,
-                path: url.pathname + url.search,
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-MCP-API-Key': apiKey,
-                    'Content-Length': Buffer.byteLength(payload)
-                }
-            };
-
-            const req = https.request(options, (res) => {
-                let data = '';
-                res.on('data', chunk => data += chunk);
-                res.on('end', () => {
-                    try {
-                        const cleanData = data.replace(/^[^{]*/, '').trim();
-                        const parsed = JSON.parse(cleanData);
-                        if (parsed.result && parsed.result.content) {
-                            const content = parsed.result.content[0];
-                            if (content && content.text) {
-                                const settings = JSON.parse(content.text);
-                                if (settings.success) {
-                                    resolve(settings);
-                                    return;
-                                }
-                            }
-                        }
-                        resolve(null);
-                    } catch (e) {
-                        console.error('Failed to parse WP settings response:', e.message);
-                        resolve(null);
-                    }
-                });
-            });
-
-            req.on('error', (e) => {
-                console.error('Failed to fetch WP settings:', e.message);
-                resolve(null);
-            });
-
-            req.setTimeout(10000, () => {
-                req.destroy();
-                console.error('WP settings request timed out');
-                resolve(null);
-            });
-
-            req.write(payload);
-            req.end();
-
-        } catch (e) {
-            console.error('Error fetching settings:', e.message);
-            resolve(null);
-        }
-    });
+        };
+        
+        const aggressiveness = parseInt(getOption('hp_abilities_image_aggressiveness'), 10);
+        const target_size = parseInt(getOption('hp_abilities_image_target_size'), 10);
+        const padding = parseFloat(getOption('hp_abilities_image_padding'));
+        const naming = getOption('hp_abilities_image_naming');
+        
+        return {
+            success: true,
+            aggressiveness: aggressiveness || DEFAULTS.aggressiveness,
+            target_size: target_size || DEFAULTS.target_size,
+            padding: isNaN(padding) ? DEFAULTS.padding : padding,
+            naming: naming || DEFAULTS.naming
+        };
+    } catch (e) {
+        console.error('Failed to fetch settings via SSH:', e.message);
+        return null;
+    }
 }
 
 /**
- * Apply aggressiveness threshold to alpha channel
- * Lower aggressiveness = keep more semi-transparent pixels
- * Higher aggressiveness = harder cutoff
+ * Extract alpha channel from cutout and apply aggressiveness threshold.
+ * Then apply the thresholded alpha to the original image.
+ * 
+ * Aggressiveness controls the cutoff:
+ * - 1 = keep pixels with >5% confidence (very permissive)
+ * - 50 = keep pixels with >50% confidence (balanced)
+ * - 100 = keep only pixels with >95% confidence (strict)
  */
-async function applyAggressiveness(imageBuffer, aggressiveness) {
-    // Map 1-100 to threshold (inverted: low aggr = low threshold = keep more)
-    // aggressiveness 1 -> threshold ~0.1 (keep pixels with >10% opacity)
-    // aggressiveness 50 -> threshold ~0.5 (keep pixels with >50% opacity) 
-    // aggressiveness 100 -> threshold ~0.95 (keep only very opaque pixels)
-    const threshold = (aggressiveness / 100) * 0.9 + 0.05; // Maps to 0.05-0.95
+async function applyThresholdedMaskToOriginal(originalBuffer, cutoutBuffer, aggressiveness) {
+    // Map aggressiveness 1-100 to threshold 5%-95%
+    const threshold = (aggressiveness / 100) * 0.9 + 0.05;
     const thresholdValue = Math.round(threshold * 255);
+    
+    console.error(`  Threshold: ${thresholdValue}/255 (keeping pixels with >${Math.round(threshold * 100)}% confidence)`);
 
-    const { data, info } = await sharp(imageBuffer)
+    // Get original image as RGBA
+    const { data: origData, info: origInfo } = await sharp(originalBuffer)
         .ensureAlpha()
         .raw()
         .toBuffer({ resolveWithObject: true });
-
-    // Apply threshold to alpha channel (every 4th byte starting at index 3)
-    for (let i = 3; i < data.length; i += 4) {
-        if (data[i] < thresholdValue) {
-            data[i] = 0; // Fully transparent
-        }
-        // Keep pixels above threshold as-is (preserves smooth edges when aggressiveness is low)
+    
+    // Get cutout (which has the AI-generated alpha channel)
+    const { data: cutoutData, info: cutoutInfo } = await sharp(cutoutBuffer)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+    
+    // Ensure dimensions match
+    if (origInfo.width !== cutoutInfo.width || origInfo.height !== cutoutInfo.height) {
+        throw new Error('Original and cutout dimensions do not match');
     }
-
-    // Reconstruct image from raw data
-    return sharp(data, {
+    
+    // Create output buffer
+    const outputData = Buffer.alloc(origInfo.width * origInfo.height * 4);
+    
+    // For each pixel: use original RGB, apply thresholded alpha from cutout
+    for (let i = 0; i < origInfo.width * origInfo.height; i++) {
+        const origAlpha = cutoutData[i * 4 + 3];  // Alpha from AI cutout
+        
+        // Apply threshold
+        let newAlpha;
+        if (origAlpha < thresholdValue) {
+            newAlpha = 0;  // Below threshold = fully transparent
+        } else {
+            newAlpha = 255;  // Above threshold = fully opaque (preserve original colors)
+        }
+        
+        outputData[i * 4] = origData[i * 4];       // R from original
+        outputData[i * 4 + 1] = origData[i * 4 + 1]; // G from original
+        outputData[i * 4 + 2] = origData[i * 4 + 2]; // B from original
+        outputData[i * 4 + 3] = newAlpha;            // Thresholded alpha
+    }
+    
+    return sharp(outputData, {
         raw: {
-            width: info.width,
-            height: info.height,
+            width: origInfo.width,
+            height: origInfo.height,
             channels: 4
         }
     }).png().toBuffer();
+}
+
+/**
+ * Download image from URL
+ */
+async function downloadImage(url) {
+    const response = await axios({
+        url,
+        method: 'GET',
+        responseType: 'arraybuffer'
+    });
+    return Buffer.from(response.data);
 }
 
 /**
@@ -179,26 +162,101 @@ function generateFilename(pattern, sku, angle) {
         + '.png';
 }
 
+/**
+ * Upload image to WordPress via SCP + WP-CLI
+ */
+async function uploadToWordPress(localPath, productId, isThumbnail, sku, angle) {
+    const filename = path.basename(localPath);
+    const remoteTempPath = `${SSH_CONFIG.remotePath}/${filename}`;
+    
+    console.error('Uploading to staging server...');
+    
+    // SCP upload
+    const scpCmd = `scp -P ${SSH_CONFIG.port} -i "${SSH_CONFIG.key}" "${localPath}" ${SSH_CONFIG.user}@${SSH_CONFIG.host}:${remoteTempPath}`;
+    try {
+        execSync(scpCmd, { stdio: 'pipe' });
+    } catch (e) {
+        throw new Error(`SCP failed: ${e.message}`);
+    }
+    
+    console.error('Importing to WordPress Media Library...');
+    
+    // WP-CLI import
+    const title = `${sku} ${angle}`;
+    const alt = `${sku} product image - ${angle} view`;
+    const importCmd = `ssh -i "${SSH_CONFIG.key}" -p ${SSH_CONFIG.port} ${SSH_CONFIG.user}@${SSH_CONFIG.host} "cd public && wp media import ${remoteTempPath} --title='${title}' --alt='${alt}' --porcelain 2>/dev/null"`;
+    
+    let attachmentId;
+    try {
+        const result = execSync(importCmd, { encoding: 'utf8' });
+        attachmentId = parseInt(result.trim().split('\n').pop(), 10);
+    } catch (e) {
+        throw new Error(`WP media import failed: ${e.message}`);
+    }
+    
+    if (!attachmentId || isNaN(attachmentId)) {
+        throw new Error('Failed to get attachment ID from import');
+    }
+    
+    console.error(`Attachment ID: ${attachmentId}`);
+    
+    // Set as featured image or add to gallery
+    if (productId) {
+        if (isThumbnail) {
+            console.error('Setting as featured image...');
+            const thumbCmd = `ssh -i "${SSH_CONFIG.key}" -p ${SSH_CONFIG.port} ${SSH_CONFIG.user}@${SSH_CONFIG.host} "cd public && wp post meta update ${productId} _thumbnail_id ${attachmentId} 2>/dev/null"`;
+            execSync(thumbCmd, { stdio: 'pipe' });
+        } else {
+            console.error('Adding to product gallery...');
+            const getGalleryCmd = `ssh -i "${SSH_CONFIG.key}" -p ${SSH_CONFIG.port} ${SSH_CONFIG.user}@${SSH_CONFIG.host} "cd public && wp post meta get ${productId} _product_image_gallery 2>/dev/null || echo ''"`;
+            let gallery = '';
+            try {
+                gallery = execSync(getGalleryCmd, { encoding: 'utf8' }).trim();
+            } catch (e) { /* no gallery yet */ }
+            
+            const newGallery = gallery ? `${gallery},${attachmentId}` : `${attachmentId}`;
+            const setGalleryCmd = `ssh -i "${SSH_CONFIG.key}" -p ${SSH_CONFIG.port} ${SSH_CONFIG.user}@${SSH_CONFIG.host} "cd public && wp post meta update ${productId} _product_image_gallery '${newGallery}' 2>/dev/null"`;
+            execSync(setGalleryCmd, { stdio: 'pipe' });
+        }
+    }
+    
+    // Cleanup remote temp file
+    const cleanupCmd = `ssh -i "${SSH_CONFIG.key}" -p ${SSH_CONFIG.port} ${SSH_CONFIG.user}@${SSH_CONFIG.host} "rm ${remoteTempPath} 2>/dev/null || true"`;
+    try { execSync(cleanupCmd, { stdio: 'pipe' }); } catch (e) { /* ignore */ }
+    
+    // Get the final URL
+    const urlCmd = `ssh -i "${SSH_CONFIG.key}" -p ${SSH_CONFIG.port} ${SSH_CONFIG.user}@${SSH_CONFIG.host} "cd public && wp post get ${attachmentId} --field=guid 2>/dev/null"`;
+    let imageUrl = '';
+    try {
+        imageUrl = execSync(urlCmd, { encoding: 'utf8' }).trim();
+    } catch (e) { /* ignore */ }
+    
+    return {
+        attachment_id: attachmentId,
+        url: imageUrl,
+        product_id: productId,
+        is_thumbnail: isThumbnail
+    };
+}
+
 async function prepareImage() {
     const args = process.argv.slice(2);
     const params = {};
     
-    // Parse arguments (handle both --key value and --flag formats)
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
         if (arg.startsWith('--')) {
-            const key = arg.replace('--', '');
-            // Check if next arg is a value or another flag
+            const key = arg.replace('--', '').replace(/-/g, '_');
             if (args[i + 1] && !args[i + 1].startsWith('--')) {
                 params[key] = args[i + 1];
-                i++; // Skip the value
+                i++;
             } else {
-                params[key] = true; // It's a flag
+                params[key] = true;
             }
         }
     }
 
-    const { url, file, sku, angle = 'front', sync } = params;
+    const { url, file, sku, angle = 'front', sync, upload, product_id, thumbnail } = params;
 
     if (!url && !file) {
         console.error(JSON.stringify({ success: false, error: 'Missing --url or --file parameter' }));
@@ -210,25 +268,29 @@ async function prepareImage() {
         process.exit(1);
     }
 
+    if (upload && !product_id) {
+        console.error(JSON.stringify({ success: false, error: '--upload requires --product-id parameter' }));
+        process.exit(1);
+    }
+
     try {
         if (!fs.existsSync(TEMP_DIR)) {
             fs.mkdirSync(TEMP_DIR, { recursive: true });
         }
 
-        // Fetch settings from WordPress if --sync is provided
+        // Fetch settings from WordPress if --sync is provided OR if --upload is used
         let settings = { ...DEFAULTS };
         
-        if (sync) {
-            console.error('Syncing settings from WordPress...');
-            const wpSettings = await fetchSettingsFromWP();
-            if (wpSettings) {
+        if (sync || upload) {
+            const wpSettings = fetchSettingsFromWP();
+            if (wpSettings && wpSettings.success) {
                 settings = {
-                    target_size: wpSettings.target_size || DEFAULTS.target_size,
-                    padding: wpSettings.padding || DEFAULTS.padding,
-                    aggressiveness: wpSettings.aggressiveness || DEFAULTS.aggressiveness,
-                    naming: wpSettings.naming || DEFAULTS.naming
+                    target_size: wpSettings.target_size,
+                    padding: wpSettings.padding,
+                    aggressiveness: wpSettings.aggressiveness,
+                    naming: wpSettings.naming
                 };
-                console.error(`Settings loaded: size=${settings.target_size}, padding=${settings.padding}, aggressiveness=${settings.aggressiveness}`);
+                console.error(`✓ Settings from WP: aggressiveness=${settings.aggressiveness}, size=${settings.target_size}, padding=${settings.padding}`);
             } else {
                 console.error('Failed to sync settings, using defaults');
             }
@@ -241,52 +303,58 @@ async function prepareImage() {
         if (params.naming) settings.naming = params.naming;
 
         let inputSource;
+        let originalBuffer;
+        
         if (url) {
             console.error(`Processing URL: ${url}`);
             inputSource = url;
+            originalBuffer = await downloadImage(url);
         } else {
             console.error(`Processing File: ${file}`);
             inputSource = path.resolve(file);
+            originalBuffer = fs.readFileSync(inputSource);
         }
+        
+        // Save original for later use (we'll apply the mask to it)
+        const originalPath = path.join(TEMP_DIR, `${sku}-${angle}-original.png`);
+        fs.writeFileSync(originalPath, originalBuffer);
 
-        // 1. Remove Background (via helper process to avoid native conflicts)
-        console.error('Removing background...');
-        const cutoutTempPath = path.join(TEMP_DIR, `${sku}-${angle}-cutout.png`);
+        // 1. Get cutout from AI (preserves raw alpha probabilities)
+        console.error('Getting cutout from AI...');
+        const cutoutPath = path.join(TEMP_DIR, `${sku}-${angle}-cutout.png`);
         
         try {
-            execSync(`node "${path.join(__dirname, 'bg-remove-helper.js')}" "${inputSource}" "${cutoutTempPath}"`, { stdio: 'inherit' });
+            execSync(`node "${path.join(__dirname, 'bg-remove-helper.js')}" "${inputSource}" "${cutoutPath}"`, { stdio: 'inherit' });
         } catch (e) {
             throw new Error('Background removal failed');
         }
 
-        let cutoutBuffer = fs.readFileSync(cutoutTempPath);
+        const cutoutFromAI = fs.readFileSync(cutoutPath);
 
-        // 2. Apply aggressiveness threshold to alpha channel
+        // 2. Apply our aggressiveness threshold to the alpha channel
+        // and use original image colors (not cutout colors which may be degraded)
         console.error(`Applying aggressiveness threshold: ${settings.aggressiveness}/100`);
-        cutoutBuffer = await applyAggressiveness(cutoutBuffer, settings.aggressiveness);
+        let cutoutBuffer = await applyThresholdedMaskToOriginal(originalBuffer, cutoutFromAI, settings.aggressiveness);
 
-        // 3. Process with Sharp - trim transparent edges
+        // 4. Trim and resize
+        console.error('Trimming and resizing...');
         const trimmed = await sharp(cutoutBuffer).trim().toBuffer({ resolveWithObject: true });
-        
         const { width, height } = trimmed.info;
         
-        // Calculate scale to fit in TARGET_SIZE with padding
         const maxDim = settings.target_size * (1 - settings.padding * 2);
         const scale = Math.min(maxDim / width, maxDim / height);
         
         const newWidth = Math.round(width * scale);
         const newHeight = Math.round(height * scale);
 
-        // Resize the trimmed cutout
         const resizedCutout = await sharp(trimmed.data)
             .resize(newWidth, newHeight)
             .toBuffer();
 
-        // Generate output filename
+        // 5. Composite on canvas
         const outputFilename = generateFilename(settings.naming, sku, angle);
         const outputPath = path.join(TEMP_DIR, outputFilename);
         
-        // Create transparent background and composite the cutout in the center
         await sharp({
             create: {
                 width: settings.target_size,
@@ -299,10 +367,11 @@ async function prepareImage() {
         .png()
         .toFile(outputPath);
 
-        // Clean up temp cutout
-        try { fs.unlinkSync(cutoutTempPath); } catch (e) { /* ignore */ }
+        // Clean up temp files
+        try { fs.unlinkSync(cutoutPath); } catch (e) { /* ignore */ }
+        try { fs.unlinkSync(originalPath); } catch (e) { /* ignore */ }
 
-        console.log(JSON.stringify({
+        const result = {
             success: true,
             sku,
             angle,
@@ -317,7 +386,17 @@ async function prepareImage() {
                 aggressiveness: settings.aggressiveness,
                 naming: settings.naming
             }
-        }));
+        };
+
+        // 6. Upload to WordPress if --upload flag is set
+        if (upload) {
+            const isThumbnail = thumbnail !== 'false' && (thumbnail === true || thumbnail === 'true' || angle === 'front');
+            const uploadResult = await uploadToWordPress(outputPath, parseInt(product_id, 10), isThumbnail, sku, angle);
+            result.upload = uploadResult;
+            console.error(`✓ Uploaded and ${isThumbnail ? 'set as featured image' : 'added to gallery'}`);
+        }
+
+        console.log(JSON.stringify(result));
 
     } catch (error) {
         console.error(JSON.stringify({
