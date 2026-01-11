@@ -80,17 +80,19 @@ function fetchSettingsFromWP() {
 }
 
 /**
- * Smooth a binary alpha mask using Gaussian blur + re-threshold.
- * This creates smooth, predictable edges ideal for bottle shapes.
+ * Smooth a binary alpha mask using morphological dilation.
+ * This expands the mask to fill small gaps where the AI incorrectly
+ * removed edge pixels. Ideal for recovering clipped bottle edges.
  * 
- * Smoothing controls blur radius:
- * - 0 = no smoothing (original jagged edges)
- * - 10 = moderate smoothing (good for most bottles)
- * - 20 = heavy smoothing (very clean curves)
+ * Smoothing controls expansion radius:
+ * - 0 = no expansion (original edges)
+ * - 1-5 = subtle expansion (fills tiny gaps)
+ * - 6-10 = moderate expansion (recovers clipped edges)
+ * - 11-20 = aggressive expansion (may include background)
  * 
  * @param {Buffer} imageBuffer - RGBA image buffer
- * @param {number} smoothingRadius - Pixels of blur (0-20)
- * @returns {Buffer} - Image with smoothed alpha channel
+ * @param {number} smoothingRadius - Pixels of expansion (0-20)
+ * @returns {Buffer} - Image with expanded alpha channel
  */
 async function smoothMask(imageBuffer, smoothingRadius) {
     if (!smoothingRadius || smoothingRadius <= 0) {
@@ -111,22 +113,43 @@ async function smoothMask(imageBuffer, smoothingRadius) {
         alphaMask[i] = data[i * 4 + 3];
     }
     
-    // Create a grayscale image from alpha, blur it, then threshold
-    // Blur radius needs to be odd, so we use smoothingRadius * 2 + 1 as sigma
-    const sigma = smoothingRadius;
+    // Morphological dilation: expand opaque pixels into neighbors
+    // This fills gaps where the AI incorrectly marked edge pixels as transparent
+    const dilatedMask = Buffer.alloc(width * height);
+    const radius = smoothingRadius;
     
-    const blurredAlpha = await sharp(alphaMask, { raw: { width, height, channels: 1 } })
-        .blur(Math.max(0.3, sigma))  // sharp requires blur >= 0.3
-        .raw()
-        .toBuffer();
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const idx = y * width + x;
+            let maxVal = alphaMask[idx];
+            
+            // Check circular neighborhood for any opaque pixel
+            for (let dy = -radius; dy <= radius; dy++) {
+                for (let dx = -radius; dx <= radius; dx++) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist <= radius) {
+                            const nIdx = ny * width + nx;
+                            if (alphaMask[nIdx] > maxVal) {
+                                maxVal = alphaMask[nIdx];
+                            }
+                        }
+                    }
+                }
+            }
+            dilatedMask[idx] = maxVal;
+        }
+    }
     
-    // Re-threshold at 128 (50%) and apply back to image
+    // Apply dilated mask back to image
     const outputData = Buffer.alloc(width * height * 4);
     for (let i = 0; i < width * height; i++) {
         outputData[i * 4] = data[i * 4];         // R
         outputData[i * 4 + 1] = data[i * 4 + 1]; // G
         outputData[i * 4 + 2] = data[i * 4 + 2]; // B
-        outputData[i * 4 + 3] = blurredAlpha[i] >= 128 ? 255 : 0;  // Thresholded alpha
+        outputData[i * 4 + 3] = dilatedMask[i];
     }
     
     return sharp(outputData, { raw: { width, height, channels: 4 } })
