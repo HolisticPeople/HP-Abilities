@@ -430,7 +430,11 @@ class Plugin
                     'data' => [
                         'type' => 'object', 
                         'description' => 'Comprehensive update data (core fields, acf, seo)',
-                        'properties' => (object)[],
+                        'properties' => [
+                            'status' => ['type' => 'string', 'description' => 'Product status (publish, private, draft)'],
+                            'acf'    => ['type' => 'object', 'description' => 'ACF fields to update'],
+                            'seo'    => ['type' => 'object', 'description' => 'SEO meta to update'],
+                        ],
                     ],
                 ],
                 'required'   => ['sku', 'data'],
