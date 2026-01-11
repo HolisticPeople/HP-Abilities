@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const sharp = require('sharp');
-const { removeBackground } = require('@imgly/background-removal-node');
+const { execSync } = require('child_process');
 
 // Configuration
 const TARGET_SIZE = 1100;
@@ -55,15 +55,24 @@ async function prepareImage() {
 
         let inputBuffer;
         if (url) {
-            inputBuffer = await downloadImage(url);
+            console.error(`Processing URL: ${url}`);
+            inputSource = url;
         } else {
-            inputBuffer = fs.readFileSync(file);
+            console.error(`Processing File: ${file}`);
+            inputSource = path.resolve(file);
         }
 
-        // 1. Remove Background
-        // Note: This downloads the model on first run (~150MB)
-        const blob = await removeBackground(inputBuffer);
-        const cutoutBuffer = Buffer.from(await blob.arrayBuffer());
+        // 1. Remove Background (via helper process to avoid native conflicts)
+        console.error('Removing background...');
+        const cutoutTempPath = path.join(TEMP_DIR, `${sku}-${angle}-cutout.png`);
+        
+        try {
+            execSync(`node "${path.join(__dirname, 'bg-remove-helper.js')}" "${inputSource}" "${cutoutTempPath}"`, { stdio: 'inherit' });
+        } catch (e) {
+            throw new Error('Background removal failed');
+        }
+
+        const cutoutBuffer = fs.readFileSync(cutoutTempPath);
 
         // 2. Process with Sharp
         // First, trim the transparent edges of the cutout

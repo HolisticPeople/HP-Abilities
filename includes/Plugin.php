@@ -694,20 +694,23 @@ class Plugin
     {
         wp_register_ability('hp-abilities/media-upload', [
             'label'               => 'Upload Media',
-            'description'         => 'Upload a file (base64) to the WordPress Media Library',
+            'description'         => 'Upload a file to Media Library. Supports: url (sideload from URL), server_path (import from server), or file_content (base64).',
             'category'            => 'hp-admin',
             'execute_callback'    => [ProductManager::class, 'uploadMedia'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
             'input_schema'        => [
                 'type'       => 'object',
                 'properties' => [
-                    'file_content' => ['type' => 'string', 'description' => 'Base64 encoded file content'],
-                    'file_name'    => ['type' => 'string', 'description' => 'Name of the file (e.g. image.png)'],
+                    'url'          => ['type' => 'string', 'description' => 'Remote URL to sideload image from (preferred for public images)'],
+                    'server_path'  => ['type' => 'string', 'description' => 'Absolute path on server (e.g. /tmp/image.png) - requires SCP first'],
+                    'file_content' => ['type' => 'string', 'description' => 'Base64 encoded file content (legacy, for small files only)'],
+                    'file_name'    => ['type' => 'string', 'description' => 'Desired filename (auto-detected from url/path if not provided)'],
+                    'title'        => ['type' => 'string', 'description' => 'Title for the media attachment'],
                     'alt_text'     => ['type' => 'string', 'description' => 'Alt text for the image'],
-                    'product_id'   => ['type' => 'integer', 'description' => 'Optional Product ID to attach this media to'],
-                    'is_thumbnail' => ['type' => 'boolean', 'description' => 'Whether to set as product thumbnail (requires product_id)', 'default' => false],
+                    'product_id'   => ['type' => 'integer', 'description' => 'Product ID to attach this media to'],
+                    'is_thumbnail' => ['type' => 'boolean', 'description' => 'Set as product featured image (requires product_id)', 'default' => false],
                 ],
-                'required'   => ['file_content', 'file_name'],
+                'required'   => [],
             ],
             'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
         ]);

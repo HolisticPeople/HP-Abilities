@@ -692,63 +692,167 @@ class ProductManager
     }
 
     /**
-     * Upload a file from base64 to the Media Library.
+     * Upload a file to the Media Library.
+     * 
+     * Supports three input methods:
+     * 1. url - Sideload from a remote URL (best for public images)
+     * 2. server_path - Import from a path on the server (for SCP'd files)
+     * 3. file_content - Base64 encoded content (legacy, for small files)
      */
     public static function uploadMedia(array $input): array
     {
+        $url = $input['url'] ?? '';
+        $server_path = $input['server_path'] ?? '';
         $file_content = $input['file_content'] ?? '';
         $file_name = sanitize_file_name($input['file_name'] ?? 'upload.png');
         $alt_text = sanitize_text_field($input['alt_text'] ?? '');
+        $title = sanitize_text_field($input['title'] ?? '');
         $product_id = isset($input['product_id']) ? (int) $input['product_id'] : 0;
         $is_thumbnail = isset($input['is_thumbnail']) ? (bool) $input['is_thumbnail'] : false;
 
-        if (empty($file_content)) {
-            return ['success' => false, 'error' => __('File content is missing', 'hp-abilities')];
+        // Require at least one source
+        if (empty($url) && empty($server_path) && empty($file_content)) {
+            return ['success' => false, 'error' => __('One of url, server_path, or file_content is required', 'hp-abilities')];
         }
 
-        // Decode base64
-        $decoded_data = base64_decode($file_content);
-        if (!$decoded_data) {
-            return ['success' => false, 'error' => __('Invalid base64 content', 'hp-abilities')];
+        $attachment_id = 0;
+        $file_url = '';
+        $final_path = '';
+        $method = '';
+
+        // Method 1: Sideload from URL
+        if (!empty($url)) {
+            $method = 'url_sideload';
+            require_once ABSPATH . 'wp-admin/includes/media.php';
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            require_once ABSPATH . 'wp-admin/includes/image.php';
+
+            // Use the URL's filename if not provided
+            if ($file_name === 'upload.png') {
+                $url_path = wp_parse_url($url, PHP_URL_PATH);
+                if ($url_path) {
+                    $file_name = sanitize_file_name(basename($url_path));
+                }
+            }
+
+            $attachment_id = media_sideload_image($url, $product_id, $title ?: $file_name, 'id');
+            
+            if (is_wp_error($attachment_id)) {
+                return ['success' => false, 'error' => $attachment_id->get_error_message(), 'method' => $method];
+            }
+
+            $file_url = wp_get_attachment_url($attachment_id);
+            $final_path = get_attached_file($attachment_id);
         }
+        // Method 2: Import from server path
+        elseif (!empty($server_path)) {
+            $method = 'server_path';
+            
+            // Security: Only allow paths in /tmp/ or uploads directory
+            $allowed_prefixes = [
+                '/tmp/',
+                '/www/',
+                wp_upload_dir()['basedir'],
+            ];
+            
+            $path_allowed = false;
+            foreach ($allowed_prefixes as $prefix) {
+                if (strpos($server_path, $prefix) === 0) {
+                    $path_allowed = true;
+                    break;
+                }
+            }
+            
+            if (!$path_allowed) {
+                return ['success' => false, 'error' => __('Server path not in allowed directories (tmp, www, uploads)', 'hp-abilities'), 'method' => $method];
+            }
+            
+            if (!file_exists($server_path)) {
+                return ['success' => false, 'error' => sprintf(__('File not found: %s', 'hp-abilities'), $server_path), 'method' => $method];
+            }
 
-        // Upload bits
-        $upload = wp_upload_bits($file_name, null, $decoded_data);
-        if ($upload['error']) {
-            return ['success' => false, 'error' => $upload['error']];
+            // Read file and upload
+            $file_data = file_get_contents($server_path);
+            if ($file_data === false) {
+                return ['success' => false, 'error' => __('Could not read server file', 'hp-abilities'), 'method' => $method];
+            }
+
+            // Use server file's name if not provided
+            if ($file_name === 'upload.png') {
+                $file_name = sanitize_file_name(basename($server_path));
+            }
+
+            $upload = wp_upload_bits($file_name, null, $file_data);
+            if ($upload['error']) {
+                return ['success' => false, 'error' => $upload['error'], 'method' => $method];
+            }
+
+            $final_path = $upload['file'];
+            $file_url = $upload['url'];
+            $file_type = wp_check_filetype($final_path, null);
+
+            $attachment = [
+                'guid'           => $file_url,
+                'post_mime_type' => $file_type['type'],
+                'post_title'     => $title ?: preg_replace('/\.[^.]+$/', '', $file_name),
+                'post_content'   => '',
+                'post_status'    => 'inherit'
+            ];
+
+            $attachment_id = wp_insert_attachment($attachment, $final_path, $product_id);
+
+            if (is_wp_error($attachment_id)) {
+                return ['success' => false, 'error' => $attachment_id->get_error_message(), 'method' => $method];
+            }
+
+            // Generate metadata
+            require_once ABSPATH . 'wp-admin/includes/image.php';
+            $attachment_data = wp_generate_attachment_metadata($attachment_id, $final_path);
+            wp_update_attachment_metadata($attachment_id, $attachment_data);
         }
+        // Method 3: Base64 content (legacy)
+        else {
+            $method = 'base64';
+            $decoded_data = base64_decode($file_content);
+            if (!$decoded_data) {
+                return ['success' => false, 'error' => __('Invalid base64 content', 'hp-abilities'), 'method' => $method];
+            }
 
-        // Create attachment
-        $file_path = $upload['file'];
-        $file_url = $upload['url'];
-        $file_type = wp_check_filetype($file_path, null);
+            $upload = wp_upload_bits($file_name, null, $decoded_data);
+            if ($upload['error']) {
+                return ['success' => false, 'error' => $upload['error'], 'method' => $method];
+            }
 
-        $attachment = [
-            'guid'           => $file_url,
-            'post_mime_type' => $file_type['type'],
-            'post_title'     => preg_replace('/\.[^.]+$/', '', $file_name),
-            'post_content'   => '',
-            'post_status'    => 'inherit'
-        ];
+            $final_path = $upload['file'];
+            $file_url = $upload['url'];
+            $file_type = wp_check_filetype($final_path, null);
 
-        $attachment_id = wp_insert_attachment($attachment, $file_path, $product_id);
+            $attachment = [
+                'guid'           => $file_url,
+                'post_mime_type' => $file_type['type'],
+                'post_title'     => $title ?: preg_replace('/\.[^.]+$/', '', $file_name),
+                'post_content'   => '',
+                'post_status'    => 'inherit'
+            ];
 
-        if (is_wp_error($attachment_id)) {
-            return ['success' => false, 'error' => $attachment_id->get_error_message()];
+            $attachment_id = wp_insert_attachment($attachment, $final_path, $product_id);
+
+            if (is_wp_error($attachment_id)) {
+                return ['success' => false, 'error' => $attachment_id->get_error_message(), 'method' => $method];
+            }
+
+            require_once ABSPATH . 'wp-admin/includes/image.php';
+            $attachment_data = wp_generate_attachment_metadata($attachment_id, $final_path);
+            wp_update_attachment_metadata($attachment_id, $attachment_data);
         }
-
-        // Generate metadata
-        require_once ABSPATH . 'wp-admin/includes/image.php';
-        $attachment_data = wp_generate_attachment_metadata($attachment_id, $file_path);
-        wp_update_attachment_metadata($attachment_id, $attachment_data);
 
         // Set alt text
-        if ($alt_text) {
+        if ($alt_text && $attachment_id) {
             update_post_meta($attachment_id, '_wp_attachment_image_alt', $alt_text);
         }
 
         // Attach to product
-        if ($product_id > 0) {
+        if ($product_id > 0 && $attachment_id) {
             if ($is_thumbnail) {
                 set_post_thumbnail($product_id, $attachment_id);
             } else {
@@ -762,9 +866,12 @@ class ProductManager
 
         return [
             'success'       => true,
+            'method'        => $method,
             'attachment_id' => $attachment_id,
             'url'           => $file_url,
-            'file_path'     => $file_path,
+            'file_path'     => $final_path,
+            'product_id'    => $product_id,
+            'is_thumbnail'  => $is_thumbnail,
         ];
     }
 }
