@@ -240,22 +240,35 @@ class Plugin
     private static function get_ability_group(string $ability_id): string
     {
         $id = strtolower($ability_id);
+        $group = 'all';
         if (strpos($id, 'customers') !== false || strpos($id, 'orders') !== false || strpos($id, 'order') !== false) {
-            return 'orders';
+            $group = 'orders';
+        } elseif (strpos($id, 'funnels') !== false || strpos($id, 'funnel') !== false || strpos($id, 'protocols') !== false) {
+            $group = 'funnels';
+        } elseif (strpos($id, 'inventory') !== false || strpos($id, 'products') !== false || strpos($id, 'product') !== false || strpos($id, 'stock') !== false || strpos($id, 'kit') !== false || strpos($id, 'supply') !== false) {
+            $group = 'products';
+        } elseif (strpos($id, 'economics') !== false || strpos($id, 'profit') !== false || strpos($id, 'revenue') !== false || strpos($id, 'guidelines') !== false) {
+            $group = 'economics';
+        } elseif (strpos($id, 'seo') !== false) {
+            $group = 'funnels';
         }
-        if (strpos($id, 'funnels') !== false || strpos($id, 'funnel') !== false || strpos($id, 'protocols') !== false) {
-            return 'funnels';
-        }
-        if (strpos($id, 'inventory') !== false || strpos($id, 'products') !== false || strpos($id, 'product') !== false || strpos($id, 'stock') !== false || strpos($id, 'kit') !== false || strpos($id, 'supply') !== false) {
-            return 'products';
-        }
-        if (strpos($id, 'economics') !== false || strpos($id, 'profit') !== false || strpos($id, 'revenue') !== false || strpos($id, 'guidelines') !== false) {
-            return 'economics';
-        }
-        if (strpos($id, 'seo') !== false) {
-            return 'funnels';
-        }
-        return 'all';
+
+        // #region agent log
+        $log_payload = [
+            'location' => 'Plugin.php:get_ability_group',
+            'message' => 'Determined group',
+            'data' => [
+                'ability_id' => $ability_id,
+                'group' => $group
+            ],
+            'timestamp' => microtime(true) * 1000,
+            'sessionId' => 'debug-session',
+            'hypothesisId' => 'H1'
+        ];
+        file_put_contents('c:\\DEV\\.cursor\\debug.log', json_encode($log_payload) . "\n", FILE_APPEND);
+        // #endregion
+
+        return $group;
     }
 
     /**
@@ -263,6 +276,22 @@ class Plugin
      */
     public static function include_hp_abilities_in_wc_mcp(bool $include, string $ability_id): bool
     {
+        // #region agent log
+        $log_payload = [
+            'location' => 'Plugin.php:include_hp_abilities_in_wc_mcp',
+            'message' => 'Filtering ability',
+            'data' => [
+                'ability_id' => $ability_id,
+                'scope' => $_GET['scope'] ?? 'all',
+                'include_init' => $include
+            ],
+            'timestamp' => microtime(true) * 1000,
+            'sessionId' => 'debug-session',
+            'hypothesisId' => 'H1,H2'
+        ];
+        file_put_contents('c:\\DEV\\.cursor\\debug.log', json_encode($log_payload) . "\n", FILE_APPEND);
+        // #endregion
+
         // Get scope from request
         $scope = isset($_GET['scope']) ? sanitize_text_field($_GET['scope']) : 'all';
         
@@ -277,6 +306,9 @@ class Plugin
         // Check if explicitly disabled
         $disabled_list = get_option('hp_abilities_disabled_list', []);
         if (in_array($ability_id, $disabled_list)) {
+            // #region agent log
+            file_put_contents('c:\\DEV\\.cursor\\debug.log', json_encode(array_merge($log_payload, ['message' => 'Ability disabled', 'data' => ['ability_id' => $ability_id]])) . "\n", FILE_APPEND);
+            // #endregion
             return false;
         }
 
@@ -295,6 +327,16 @@ class Plugin
             $should_include = true;
         }
 
+        // #region agent log
+        file_put_contents('c:\\DEV\\.cursor\\debug.log', json_encode(array_merge($log_payload, ['message' => 'Filtering decision', 'data' => [
+            'ability_id' => $ability_id,
+            'group' => $group,
+            'scope' => $scope,
+            'can_manage' => $can_manage,
+            'should_include' => $should_include
+        ]])) . "\n", FILE_APPEND);
+        // #endregion
+
         return $should_include;
     }
 
@@ -303,6 +345,18 @@ class Plugin
      */
     public static function register_abilities(): void
     {
+        // #region agent log
+        $log_payload = [
+            'location' => 'Plugin.php:register_abilities',
+            'message' => 'Registering HP abilities',
+            'data' => [],
+            'timestamp' => microtime(true) * 1000,
+            'sessionId' => 'debug-session',
+            'hypothesisId' => 'H3'
+        ];
+        file_put_contents('c:\\DEV\\.cursor\\debug.log', json_encode($log_payload) . "\n", FILE_APPEND);
+        // #endregion
+
         self::load_classes();
         
         self::register_product_abilities();

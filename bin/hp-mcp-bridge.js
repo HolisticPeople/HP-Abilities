@@ -58,6 +58,28 @@ function callWP(method, params, id) {
 
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/fdc1e251-7d8c-4076-b3bd-ed8c4301842f', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            location: 'hp-mcp-bridge.js:end',
+            message: 'Received response from WP',
+            data: {
+              method: method,
+              url: API_URL,
+              statusCode: res.statusCode,
+              responseLength: data.length,
+              mcpSessionId: mcpSessionId,
+              responsePreview: data.substring(0, 500)
+            },
+            timestamp: Date.now(),
+            sessionId: 'debug-session',
+            hypothesisId: 'H2,H5'
+          })
+        }).catch(() => {});
+        // #endregion
+
         if (isNotification) return resolve(null);
 
         if (data.length === 0) {
@@ -92,6 +114,26 @@ function callWP(method, params, id) {
 
     const payload = { jsonrpc: '2.0', method: method, params: params };
     if (!isNotification) payload.id = id;
+
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/fdc1e251-7d8c-4076-b3bd-ed8c4301842f', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: 'hp-mcp-bridge.js:send',
+        message: 'Sending request to WP',
+        data: {
+          method: method,
+          url: API_URL,
+          params: params,
+          id: id
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        hypothesisId: 'H2'
+      })
+    }).catch(() => {});
+    // #endregion
 
     req.write(JSON.stringify(payload));
     req.end();
