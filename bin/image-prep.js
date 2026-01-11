@@ -28,7 +28,6 @@ const DEFAULTS = {
     target_size: 1100,
     padding: 0.05,
     aggressiveness: 50,
-    smoothing: 0,
     naming: '{sku}-{angle}'
 };
 
@@ -42,6 +41,199 @@ const SSH_CONFIG = {
 };
 
 const TEMP_DIR = path.join(process.cwd(), 'temp');
+
+/**
+ * Extract left and right edge coordinates from a binary mask.
+ * For each row, finds the leftmost and rightmost opaque pixel.
+ * 
+ * @param {Buffer} alphaData - Raw alpha channel data (1 byte per pixel)
+ * @param {number} width - Image width
+ * @param {number} height - Image height
+ * @returns {Object} - { leftEdge: number[], rightEdge: number[], topY: number, bottomY: number }
+ */
+function extractEdges(alphaData, width, height) {
+    const leftEdge = new Array(height).fill(-1);
+    const rightEdge = new Array(height).fill(-1);
+    let topY = -1;
+    let bottomY = -1;
+    
+    for (let y = 0; y < height; y++) {
+        // Scan from left to find first opaque pixel
+        for (let x = 0; x < width; x++) {
+            if (alphaData[y * width + x] >= 128) {
+                leftEdge[y] = x;
+                break;
+            }
+        }
+        
+        // Scan from right to find last opaque pixel
+        for (let x = width - 1; x >= 0; x--) {
+            if (alphaData[y * width + x] >= 128) {
+                rightEdge[y] = x;
+                break;
+            }
+        }
+        
+        // Track first and last rows with content
+        if (leftEdge[y] >= 0) {
+            if (topY < 0) topY = y;
+            bottomY = y;
+        }
+    }
+    
+    return { leftEdge, rightEdge, topY, bottomY };
+}
+
+/**
+ * Correct bottle shape by enforcing straight vertical lines for the body
+ * and smooth curves for top and bottom.
+ * 
+ * @param {Object} edges - { leftEdge, rightEdge, topY, bottomY }
+ * @param {number} height - Image height
+ * @returns {Object} - Corrected { leftEdge, rightEdge }
+ */
+function correctBottleShape(edges, height) {
+    const { leftEdge, rightEdge, topY, bottomY } = edges;
+    
+    if (topY < 0 || bottomY < 0) {
+        return edges; // No content found
+    }
+    
+    const contentHeight = bottomY - topY;
+    
+    // Define regions (approximate bottle anatomy)
+    const capEnd = topY + Math.round(contentHeight * 0.15);     // Top 15% = cap
+    const bodyStart = topY + Math.round(contentHeight * 0.20);  // Body starts at 20%
+    const bodyEnd = topY + Math.round(contentHeight * 0.85);    // Body ends at 85%
+    const bottomStart = topY + Math.round(contentHeight * 0.85); // Bottom 15%
+    
+    // Calculate the median edge position in the body region for straight lines
+    const bodyLeftEdges = [];
+    const bodyRightEdges = [];
+    
+    for (let y = bodyStart; y <= bodyEnd; y++) {
+        if (leftEdge[y] >= 0) bodyLeftEdges.push(leftEdge[y]);
+        if (rightEdge[y] >= 0) bodyRightEdges.push(rightEdge[y]);
+    }
+    
+    if (bodyLeftEdges.length === 0 || bodyRightEdges.length === 0) {
+        return edges; // Not enough data
+    }
+    
+    // Use median for robust straight line (ignores outliers from AI errors)
+    bodyLeftEdges.sort((a, b) => a - b);
+    bodyRightEdges.sort((a, b) => a - b);
+    
+    const medianLeft = bodyLeftEdges[Math.floor(bodyLeftEdges.length / 2)];
+    const medianRight = bodyRightEdges[Math.floor(bodyRightEdges.length / 2)];
+    
+    // Create corrected edges
+    const correctedLeft = [...leftEdge];
+    const correctedRight = [...rightEdge];
+    
+    // Apply straight lines to body region
+    for (let y = bodyStart; y <= bodyEnd; y++) {
+        if (correctedLeft[y] >= 0) correctedLeft[y] = medianLeft;
+        if (correctedRight[y] >= 0) correctedRight[y] = medianRight;
+    }
+    
+    // Smooth transition from cap to body (top curve)
+    for (let y = capEnd; y < bodyStart; y++) {
+        if (correctedLeft[y] >= 0 && correctedLeft[capEnd] >= 0) {
+            const t = (y - capEnd) / (bodyStart - capEnd);
+            correctedLeft[y] = Math.round(correctedLeft[capEnd] + t * (medianLeft - correctedLeft[capEnd]));
+        }
+        if (correctedRight[y] >= 0 && correctedRight[capEnd] >= 0) {
+            const t = (y - capEnd) / (bodyStart - capEnd);
+            correctedRight[y] = Math.round(correctedRight[capEnd] + t * (medianRight - correctedRight[capEnd]));
+        }
+    }
+    
+    // Smooth transition from body to bottom (bottom curve)
+    for (let y = bodyEnd + 1; y <= bottomY; y++) {
+        if (correctedLeft[y] >= 0) {
+            const t = (y - bodyEnd) / (bottomY - bodyEnd);
+            // Curve inward slightly toward center at bottom
+            const centerX = (medianLeft + medianRight) / 2;
+            correctedLeft[y] = Math.round(medianLeft + t * (centerX - medianLeft) * 0.3);
+        }
+        if (correctedRight[y] >= 0) {
+            const t = (y - bodyEnd) / (bottomY - bodyEnd);
+            const centerX = (medianLeft + medianRight) / 2;
+            correctedRight[y] = Math.round(medianRight + t * (centerX - medianRight) * 0.3);
+        }
+    }
+    
+    return { leftEdge: correctedLeft, rightEdge: correctedRight, topY, bottomY };
+}
+
+/**
+ * Rebuild a mask from corrected edge coordinates.
+ * For each row, fills pixels between left and right edge.
+ * 
+ * @param {Object} correctedEdges - { leftEdge, rightEdge }
+ * @param {number} width - Image width
+ * @param {number} height - Image height
+ * @returns {Buffer} - New alpha mask
+ */
+function rebuildMask(correctedEdges, width, height) {
+    const { leftEdge, rightEdge } = correctedEdges;
+    const newMask = Buffer.alloc(width * height, 0);
+    
+    for (let y = 0; y < height; y++) {
+        if (leftEdge[y] >= 0 && rightEdge[y] >= 0) {
+            for (let x = leftEdge[y]; x <= rightEdge[y]; x++) {
+                newMask[y * width + x] = 255;
+            }
+        }
+    }
+    
+    return newMask;
+}
+
+/**
+ * Apply bottle shape correction to an image.
+ * Extracts edges, corrects to expected bottle geometry, rebuilds mask.
+ * 
+ * @param {Buffer} imageBuffer - RGBA image buffer
+ * @returns {Buffer} - Image with corrected bottle shape
+ */
+async function correctBottleMask(imageBuffer) {
+    const { data, info } = await sharp(imageBuffer)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+    
+    const { width, height } = info;
+    
+    // Extract alpha channel
+    const alphaData = Buffer.alloc(width * height);
+    for (let i = 0; i < width * height; i++) {
+        alphaData[i] = data[i * 4 + 3];
+    }
+    
+    // Extract edges
+    const edges = extractEdges(alphaData, width, height);
+    
+    // Correct to bottle shape
+    const correctedEdges = correctBottleShape(edges, height);
+    
+    // Rebuild mask
+    const newMask = rebuildMask(correctedEdges, width, height);
+    
+    // Apply new mask to original RGB
+    const outputData = Buffer.alloc(width * height * 4);
+    for (let i = 0; i < width * height; i++) {
+        outputData[i * 4] = data[i * 4];         // R
+        outputData[i * 4 + 1] = data[i * 4 + 1]; // G
+        outputData[i * 4 + 2] = data[i * 4 + 2]; // B
+        outputData[i * 4 + 3] = newMask[i];      // Corrected alpha
+    }
+    
+    return sharp(outputData, { raw: { width, height, channels: 4 } })
+        .png()
+        .toBuffer();
+}
 
 /**
  * Fetch settings from WordPress via SSH (most reliable method)
@@ -62,7 +254,6 @@ function fetchSettingsFromWP() {
         const aggressiveness = parseInt(getOption('hp_abilities_image_aggressiveness'), 10);
         const target_size = parseInt(getOption('hp_abilities_image_target_size'), 10);
         const padding = parseFloat(getOption('hp_abilities_image_padding'));
-        const smoothing = parseInt(getOption('hp_abilities_image_smoothing'), 10);
         const naming = getOption('hp_abilities_image_naming');
         
         return {
@@ -70,103 +261,12 @@ function fetchSettingsFromWP() {
             aggressiveness: aggressiveness || DEFAULTS.aggressiveness,
             target_size: target_size || DEFAULTS.target_size,
             padding: isNaN(padding) ? DEFAULTS.padding : padding,
-            smoothing: isNaN(smoothing) ? DEFAULTS.smoothing : smoothing,
             naming: naming || DEFAULTS.naming
         };
     } catch (e) {
         console.error('Failed to fetch settings via SSH:', e.message);
         return null;
     }
-}
-
-/**
- * Smooth a binary alpha mask using morphological dilation.
- * This expands the mask to fill small gaps where the AI incorrectly
- * removed edge pixels. Ideal for recovering clipped bottle edges.
- * 
- * Smoothing controls expansion radius:
- * - 0 = no expansion (original edges)
- * - 1-5 = subtle expansion (fills tiny gaps)
- * - 6-10 = moderate expansion (recovers clipped edges)
- * - 11-20 = aggressive expansion (may include background)
- * 
- * @param {Buffer} imageBuffer - RGBA image buffer
- * @param {number} smoothingRadius - Pixels of expansion (0-20)
- * @returns {Buffer} - Image with expanded alpha channel
- */
-async function smoothMask(imageBuffer, smoothingRadius) {
-    if (!smoothingRadius || smoothingRadius <= 0) {
-        return imageBuffer;
-    }
-    
-    // Get image as raw RGBA
-    const { data, info } = await sharp(imageBuffer)
-        .ensureAlpha()
-        .raw()
-        .toBuffer({ resolveWithObject: true });
-    
-    const { width, height } = info;
-    
-    // Extract just the alpha channel
-    const alphaMask = Buffer.alloc(width * height);
-    for (let i = 0; i < width * height; i++) {
-        alphaMask[i] = data[i * 4 + 3];
-    }
-    
-    // Morphological dilation with majority voting: expand into pixels where
-    // more than 50% of neighbors are opaque. This prevents over-expansion
-    // into the background while still filling gaps in the product mask.
-    const dilatedMask = Buffer.alloc(width * height);
-    const radius = smoothingRadius;
-    
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            const idx = y * width + x;
-            
-            // If already opaque, keep it
-            if (alphaMask[idx] >= 128) {
-                dilatedMask[idx] = 255;
-                continue;
-            }
-            
-            // Count opaque vs total neighbors in circular neighborhood
-            let opaqueCount = 0;
-            let totalCount = 0;
-            
-            for (let dy = -radius; dy <= radius; dy++) {
-                for (let dx = -radius; dx <= radius; dx++) {
-                    const nx = x + dx;
-                    const ny = y + dy;
-                    if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        if (dist <= radius) {
-                            totalCount++;
-                            const nIdx = ny * width + nx;
-                            if (alphaMask[nIdx] >= 128) {
-                                opaqueCount++;
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Make opaque if more than 50% of neighbors are opaque
-            dilatedMask[idx] = (opaqueCount > totalCount * 0.5) ? 255 : 0;
-        }
-    }
-    
-    // Apply dilated mask back to image
-    const outputData = Buffer.alloc(width * height * 4);
-    for (let i = 0; i < width * height; i++) {
-        outputData[i * 4] = data[i * 4];         // R
-        outputData[i * 4 + 1] = data[i * 4 + 1]; // G
-        outputData[i * 4 + 2] = data[i * 4 + 2]; // B
-        outputData[i * 4 + 3] = dilatedMask[i];
-    }
-    
-    return sharp(outputData, { raw: { width, height, channels: 4 } })
-        .png()
-        .toBuffer();
 }
 
 /**
@@ -381,10 +481,9 @@ async function prepareImage() {
                     target_size: wpSettings.target_size,
                     padding: wpSettings.padding,
                     aggressiveness: wpSettings.aggressiveness,
-                    smoothing: wpSettings.smoothing,
                     naming: wpSettings.naming
                 };
-                console.error(`✓ Settings from WP: aggressiveness=${settings.aggressiveness}, smoothing=${settings.smoothing}, size=${settings.target_size}, padding=${settings.padding}`);
+                console.error(`✓ Settings from WP: aggressiveness=${settings.aggressiveness}, size=${settings.target_size}, padding=${settings.padding}`);
             } else {
                 console.error('Failed to sync settings, using defaults');
             }
@@ -394,7 +493,6 @@ async function prepareImage() {
         if (params.target_size) settings.target_size = parseInt(params.target_size, 10);
         if (params.padding) settings.padding = parseFloat(params.padding);
         if (params.aggressiveness) settings.aggressiveness = parseInt(params.aggressiveness, 10);
-        if (params.smoothing) settings.smoothing = parseInt(params.smoothing, 10);
         if (params.naming) settings.naming = params.naming;
 
         let inputSource;
@@ -431,11 +529,9 @@ async function prepareImage() {
         console.error(`Applying aggressiveness threshold: ${settings.aggressiveness}/100`);
         let cutoutBuffer = await applyThresholdedMaskToOriginal(originalBuffer, cutoutFromAI, settings.aggressiveness);
 
-        // 3. Apply edge smoothing if enabled (fixes jagged bottle edges)
-        if (settings.smoothing > 0) {
-            console.error(`Applying edge smoothing: ${settings.smoothing}px radius`);
-            cutoutBuffer = await smoothMask(cutoutBuffer, settings.smoothing);
-        }
+        // 3. Apply bottle shape correction (straight sides, smooth curves)
+        console.error('Applying bottle shape correction...');
+        cutoutBuffer = await correctBottleMask(cutoutBuffer);
 
         // 4. Trim and resize
         console.error('Trimming and resizing...');
@@ -485,7 +581,6 @@ async function prepareImage() {
                 target_size: settings.target_size,
                 padding: settings.padding,
                 aggressiveness: settings.aggressiveness,
-                smoothing: settings.smoothing,
                 naming: settings.naming
             }
         };
