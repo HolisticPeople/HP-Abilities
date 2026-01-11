@@ -65,13 +65,15 @@ function fetchSettingsFromWP() {
         const target_size = parseInt(getOption('hp_abilities_image_target_size'), 10);
         const padding = parseFloat(getOption('hp_abilities_image_padding'));
         const naming = getOption('hp_abilities_image_naming');
+        const correction_prompt = getOption('hp_abilities_image_correction_prompt');
         
         return {
             success: true,
             aggressiveness: aggressiveness || DEFAULTS.aggressiveness,
             target_size: target_size || DEFAULTS.target_size,
             padding: isNaN(padding) ? DEFAULTS.padding : padding,
-            naming: naming || DEFAULTS.naming
+            naming: naming || DEFAULTS.naming,
+            correction_prompt: correction_prompt || ''
         };
     } catch (e) {
         console.error('Failed to fetch settings via SSH:', e.message);
@@ -256,17 +258,18 @@ async function prepareImage() {
             fs.mkdirSync(TEMP_DIR, { recursive: true });
         }
 
-        // Fetch settings from WordPress if --sync is provided OR if --upload is used
-        let settings = { ...DEFAULTS };
+        // Fetch settings from WordPress if --sync is provided OR if --upload is used OR --mask-only
+        let settings = { ...DEFAULTS, correction_prompt: '' };
         
-        if (sync || upload) {
+        if (sync || upload || mask_only) {
             const wpSettings = fetchSettingsFromWP();
             if (wpSettings && wpSettings.success) {
                 settings = {
                     target_size: wpSettings.target_size,
                     padding: wpSettings.padding,
                     aggressiveness: wpSettings.aggressiveness,
-                    naming: wpSettings.naming
+                    naming: wpSettings.naming,
+                    correction_prompt: wpSettings.correction_prompt || ''
                 };
                 console.error(`✓ Settings from WP: aggressiveness=${settings.aggressiveness}, size=${settings.target_size}, padding=${settings.padding}`);
             } else {
@@ -322,15 +325,30 @@ async function prepareImage() {
             // Clean up temp cutout
             try { fs.unlinkSync(cutoutPath); } catch (e) { /* ignore */ }
 
-            // If --mask-only, stop here
+            // If --mask-only, stop here and display correction prompt
             if (mask_only) {
+                // Display the correction prompt to guide the agent
+                if (settings.correction_prompt) {
+                    console.error('\n=== MASK CORRECTION INSTRUCTIONS ===');
+                    console.error(settings.correction_prompt);
+                    console.error('=====================================\n');
+                }
+                
                 console.log(JSON.stringify({
                     success: true,
                     mode: 'mask-only',
                     sku,
                     angle,
                     mask: maskPath,
-                    message: 'Mask generated. Agent should inspect and edit if needed, then run with --use-mask'
+                    original: inputSource,
+                    message: 'Mask generated. Agent should inspect mask and original, apply corrections using edit-mask.js, then run with --use-mask',
+                    next_steps: [
+                        `1. View mask: ${maskPath}`,
+                        `2. View original: ${inputSource}`,
+                        '3. Identify problem areas (light on light, edge issues)',
+                        '4. Apply corrections: node bin/edit-mask.js --mask "' + maskPath + '" --left-edge X --from-row Y --to-row Z',
+                        `5. Complete: node bin/image-prep.js --sku ${sku} --use-mask "${maskPath}" --upload --product-id PRODUCT_ID`
+                    ]
                 }));
                 return;
             }

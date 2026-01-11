@@ -885,11 +885,12 @@ class ProductManager
 
         if ($action === 'get') {
             return [
-                'success'        => true,
-                'target_size'    => (int) get_option('hp_abilities_image_target_size', 1100),
-                'padding'        => (float) get_option('hp_abilities_image_padding', 0.05),
-                'aggressiveness' => (int) get_option('hp_abilities_image_aggressiveness', 50),
-                'naming'         => get_option('hp_abilities_image_naming', '{sku}-{angle}'),
+                'success'           => true,
+                'target_size'       => (int) get_option('hp_abilities_image_target_size', 1100),
+                'padding'           => (float) get_option('hp_abilities_image_padding', 0.05),
+                'aggressiveness'    => (int) get_option('hp_abilities_image_aggressiveness', 50),
+                'naming'            => get_option('hp_abilities_image_naming', '{sku}-{angle}'),
+                'correction_prompt' => get_option('hp_abilities_image_correction_prompt', \HP_Abilities\Plugin::get_default_correction_prompt()),
             ];
         }
 
@@ -920,14 +921,21 @@ class ProductManager
                 $updated['naming'] = $val;
             }
 
+            if (isset($input['correction_prompt'])) {
+                $val = wp_kses_post($input['correction_prompt']);
+                update_option('hp_abilities_image_correction_prompt', $val);
+                $updated['correction_prompt'] = $val;
+            }
+
             return [
                 'success' => true,
                 'updated' => $updated,
                 'current' => [
-                    'target_size'    => (int) get_option('hp_abilities_image_target_size', 1100),
-                    'padding'        => (float) get_option('hp_abilities_image_padding', 0.05),
-                    'aggressiveness' => (int) get_option('hp_abilities_image_aggressiveness', 50),
-                    'naming'         => get_option('hp_abilities_image_naming', '{sku}-{angle}'),
+                    'target_size'       => (int) get_option('hp_abilities_image_target_size', 1100),
+                    'padding'           => (float) get_option('hp_abilities_image_padding', 0.05),
+                    'aggressiveness'    => (int) get_option('hp_abilities_image_aggressiveness', 50),
+                    'naming'            => get_option('hp_abilities_image_naming', '{sku}-{angle}'),
+                    'correction_prompt' => get_option('hp_abilities_image_correction_prompt', \HP_Abilities\Plugin::get_default_correction_prompt()),
                 ],
             ];
         }

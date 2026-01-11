@@ -235,6 +235,52 @@ class Plugin
             'default'           => '{sku}-{angle}',
             'sanitize_callback' => 'sanitize_text_field',
         ]);
+        register_setting('hp_abilities_settings', 'hp_abilities_image_correction_prompt', [
+            'type'              => 'string',
+            'default'           => self::get_default_correction_prompt(),
+            'sanitize_callback' => 'wp_kses_post',
+        ]);
+    }
+
+    /**
+     * Get the default mask correction prompt for agents.
+     */
+    public static function get_default_correction_prompt(): string
+    {
+        return <<<'PROMPT'
+MASK CORRECTION INSTRUCTIONS
+
+When evaluating a product image mask, follow these steps:
+
+1. IDENTIFY PROBLEM ZONES
+   Compare the original image to the mask. Focus on areas where:
+   - Product color is similar to background color (light on light, dark on dark)
+   - Labels, caps, or packaging blend with the background
+   - Edges appear "melted" or irregular where they should be straight/smooth
+
+2. ANALYZE THE ORIGINAL IMAGE
+   Before correcting, determine:
+   - Where does the problematic region start and end (row numbers)?
+   - What should the correct edge position be (x coordinate)?
+   - Is the problem: inward dip, alpha spill, or both?
+
+3. APPLY MINIMAL CORRECTIONS
+   - Only correct the specific problem region, not above or below
+   - Undershoot vertically: stop BEFORE natural curves begin
+   - For bottles: body sides should be straight, caps/bottoms are curved
+   - Never create sharp corners - if your line would hit a curve, stop short
+
+4. FIX ALPHA SPILLS
+   In areas where the product should be solid but shows transparency:
+   - Identify by comparing original (solid color) to mask (becoming darker)
+   - Ensure these pixels are fully opaque (alpha = 255)
+   - Common on: light labels, reflective surfaces, translucent packaging
+
+5. VERIFY BEFORE FINALIZING
+   - The corrected mask should look like the natural product shape
+   - No sharp corners or unnatural angles
+   - All solid product areas should be fully opaque
+PROMPT;
     }
 
     /**
@@ -739,18 +785,19 @@ class Plugin
 
         wp_register_ability('hp-abilities/image-settings', [
             'label'               => 'Image Settings',
-            'description'         => 'Get or set image preparation settings (target size, padding, aggressiveness, naming)',
+            'description'         => 'Get or set image preparation settings (target size, padding, aggressiveness, naming, correction_prompt)',
             'category'            => 'hp-admin',
             'execute_callback'    => [ProductManager::class, 'imageSettings'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
             'input_schema'        => [
                 'type'       => 'object',
                 'properties' => [
-                    'action'         => ['type' => 'string', 'description' => 'Action: get or set', 'enum' => ['get', 'set']],
-                    'target_size'    => ['type' => 'integer', 'description' => 'Canvas size in pixels (for set action)'],
-                    'padding'        => ['type' => 'number', 'description' => 'Padding percent 0-0.5 (for set action)'],
-                    'aggressiveness' => ['type' => 'integer', 'description' => 'BG removal aggressiveness 1-100 (for set action)'],
-                    'naming'         => ['type' => 'string', 'description' => 'Naming pattern with {sku}, {angle}, {timestamp} (for set action)'],
+                    'action'            => ['type' => 'string', 'description' => 'Action: get or set', 'enum' => ['get', 'set']],
+                    'target_size'       => ['type' => 'integer', 'description' => 'Canvas size in pixels (for set action)'],
+                    'padding'           => ['type' => 'number', 'description' => 'Padding percent 0-0.5 (for set action)'],
+                    'aggressiveness'    => ['type' => 'integer', 'description' => 'BG removal aggressiveness 1-100 (for set action)'],
+                    'naming'            => ['type' => 'string', 'description' => 'Naming pattern with {sku}, {angle}, {timestamp} (for set action)'],
+                    'correction_prompt' => ['type' => 'string', 'description' => 'Agent instructions for mask correction (for set action)'],
                 ],
                 'required'   => ['action'],
             ],
@@ -1181,6 +1228,7 @@ class Plugin
         $image_padding = get_option('hp_abilities_image_padding', 0.05);
         $image_aggressiveness = get_option('hp_abilities_image_aggressiveness', 50);
         $image_naming = get_option('hp_abilities_image_naming', '{sku}-{angle}');
+        $image_correction_prompt = get_option('hp_abilities_image_correction_prompt', self::get_default_correction_prompt());
 
         $stg_key = ($stg_ck && $stg_cs) ? "{$stg_ck}:{$stg_cs}" : 'YOUR_STAGING_API_KEY_HERE';
         $prod_key = ($prod_ck && $prod_cs) ? "{$prod_ck}:{$prod_cs}" : 'YOUR_PRODUCTION_API_KEY_HERE';
@@ -1372,6 +1420,13 @@ class Plugin
                                     <td>
                                         <input name="hp_abilities_image_naming" type="text" id="hp_abilities_image_naming" value="<?php echo esc_attr($image_naming); ?>" class="regular-text" placeholder="{sku}-{angle}">
                                         <span class="description"><?php echo esc_html__('Variables: {sku}, {angle}, {timestamp}', 'hp-abilities'); ?></span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" style="vertical-align: top;"><label for="hp_abilities_image_correction_prompt"><?php echo esc_html__('Agent Correction Prompt', 'hp-abilities'); ?></label></th>
+                                    <td>
+                                        <textarea name="hp_abilities_image_correction_prompt" id="hp_abilities_image_correction_prompt" rows="15" style="width: 100%; font-family: monospace; font-size: 12px;"><?php echo esc_textarea($image_correction_prompt); ?></textarea>
+                                        <p class="description"><?php echo esc_html__('Instructions delivered to agents when performing mask correction. Guides how to identify and fix edge issues.', 'hp-abilities'); ?></p>
                                     </td>
                                 </tr>
                             </table>
