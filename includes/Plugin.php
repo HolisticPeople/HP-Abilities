@@ -254,6 +254,7 @@ class Plugin
         }
 
         // #region agent log
+        $log_file = (DIRECTORY_SEPARATOR === '/') ? ABSPATH . 'wp-content/debug-mcp.log' : 'c:\\DEV\\.cursor\\debug.log';
         $log_payload = [
             'location' => 'Plugin.php:get_ability_group',
             'message' => 'Determined group',
@@ -265,7 +266,7 @@ class Plugin
             'sessionId' => 'debug-session',
             'hypothesisId' => 'H1'
         ];
-        file_put_contents('c:\\DEV\\.cursor\\debug.log', json_encode($log_payload) . "\n", FILE_APPEND);
+        file_put_contents($log_file, json_encode($log_payload) . "\n", FILE_APPEND);
         // #endregion
 
         return $group;
@@ -277,6 +278,7 @@ class Plugin
     public static function include_hp_abilities_in_wc_mcp(bool $include, string $ability_id): bool
     {
         // #region agent log
+        $log_file = (DIRECTORY_SEPARATOR === '/') ? ABSPATH . 'wp-content/debug-mcp.log' : 'c:\\DEV\\.cursor\\debug.log';
         $log_payload = [
             'location' => 'Plugin.php:include_hp_abilities_in_wc_mcp',
             'message' => 'Filtering ability',
@@ -289,7 +291,7 @@ class Plugin
             'sessionId' => 'debug-session',
             'hypothesisId' => 'H1,H2'
         ];
-        file_put_contents('c:\\DEV\\.cursor\\debug.log', json_encode($log_payload) . "\n", FILE_APPEND);
+        file_put_contents($log_file, json_encode($log_payload) . "\n", FILE_APPEND);
         // #endregion
 
         // Get scope from request
@@ -307,7 +309,7 @@ class Plugin
         $disabled_list = get_option('hp_abilities_disabled_list', []);
         if (in_array($ability_id, $disabled_list)) {
             // #region agent log
-            file_put_contents('c:\\DEV\\.cursor\\debug.log', json_encode(array_merge($log_payload, ['message' => 'Ability disabled', 'data' => ['ability_id' => $ability_id]])) . "\n", FILE_APPEND);
+            file_put_contents($log_file, json_encode(array_merge($log_payload, ['message' => 'Ability disabled', 'data' => ['ability_id' => $ability_id]])) . "\n", FILE_APPEND);
             // #endregion
             return false;
         }
@@ -328,7 +330,7 @@ class Plugin
         }
 
         // #region agent log
-        file_put_contents('c:\\DEV\\.cursor\\debug.log', json_encode(array_merge($log_payload, ['message' => 'Filtering decision', 'data' => [
+        file_put_contents($log_file, json_encode(array_merge($log_payload, ['message' => 'Filtering decision', 'data' => [
             'ability_id' => $ability_id,
             'group' => $group,
             'scope' => $scope,
@@ -346,6 +348,7 @@ class Plugin
     public static function register_abilities(): void
     {
         // #region agent log
+        $log_file = (DIRECTORY_SEPARATOR === '/') ? ABSPATH . 'wp-content/debug-mcp.log' : 'c:\\DEV\\.cursor\\debug.log';
         $log_payload = [
             'location' => 'Plugin.php:register_abilities',
             'message' => 'Registering HP abilities',
@@ -354,7 +357,7 @@ class Plugin
             'sessionId' => 'debug-session',
             'hypothesisId' => 'H3'
         ];
-        file_put_contents('c:\\DEV\\.cursor\\debug.log', json_encode($log_payload) . "\n", FILE_APPEND);
+        file_put_contents($log_file, json_encode($log_payload) . "\n", FILE_APPEND);
         // #endregion
 
         self::load_classes();
