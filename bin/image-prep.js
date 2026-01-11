@@ -52,10 +52,13 @@ function fetchSettingsFromWP() {
     try {
         console.error('Fetching settings from WordPress via SSH...');
         
-        const getOption = (name) => {
+        const getOption = (name, multiline = false) => {
             const cmd = `ssh -i "${SSH_CONFIG.key}" -p ${SSH_CONFIG.port} ${SSH_CONFIG.user}@${SSH_CONFIG.host} "cd public && wp option get ${name} 2>/dev/null || echo ''"`;
             try {
-                return execSync(cmd, { encoding: 'utf8' }).trim().split('\n').pop();
+                const result = execSync(cmd, { encoding: 'utf8' }).trim();
+                // For single-line values, pop() removes any SSH connection messages
+                // For multi-line values, we want the full result
+                return multiline ? result : result.split('\n').pop();
             } catch (e) {
                 return '';
             }
@@ -65,7 +68,7 @@ function fetchSettingsFromWP() {
         const target_size = parseInt(getOption('hp_abilities_image_target_size'), 10);
         const padding = parseFloat(getOption('hp_abilities_image_padding'));
         const naming = getOption('hp_abilities_image_naming');
-        const correction_prompt = getOption('hp_abilities_image_correction_prompt');
+        const correction_prompt = getOption('hp_abilities_image_correction_prompt', true);
         
         return {
             success: true,
