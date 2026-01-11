@@ -213,6 +213,28 @@ class Plugin
             'type'              => 'string',
             'sanitize_callback' => 'sanitize_text_field',
         ]);
+
+        // Image preparation settings
+        register_setting('hp_abilities_settings', 'hp_abilities_image_target_size', [
+            'type'              => 'integer',
+            'default'           => 1100,
+            'sanitize_callback' => 'absint',
+        ]);
+        register_setting('hp_abilities_settings', 'hp_abilities_image_padding', [
+            'type'              => 'number',
+            'default'           => 0.05,
+            'sanitize_callback' => function($val) { return max(0, min(0.5, floatval($val))); },
+        ]);
+        register_setting('hp_abilities_settings', 'hp_abilities_image_aggressiveness', [
+            'type'              => 'integer',
+            'default'           => 50,
+            'sanitize_callback' => function($val) { return max(1, min(100, absint($val))); },
+        ]);
+        register_setting('hp_abilities_settings', 'hp_abilities_image_naming', [
+            'type'              => 'string',
+            'default'           => '{sku}-{angle}',
+            'sanitize_callback' => 'sanitize_text_field',
+        ]);
     }
 
     /**
@@ -250,7 +272,7 @@ class Plugin
             $group = 'orders';
         } elseif (strpos($id, 'funnels') !== false || strpos($id, 'funnel') !== false || strpos($id, 'protocols') !== false) {
             $group = 'funnels';
-        } elseif (strpos($id, 'inventory') !== false || strpos($id, 'products') !== false || strpos($id, 'product') !== false || strpos($id, 'stock') !== false || strpos($id, 'kit') !== false || strpos($id, 'supply') !== false) {
+        } elseif (strpos($id, 'inventory') !== false || strpos($id, 'products') !== false || strpos($id, 'product') !== false || strpos($id, 'stock') !== false || strpos($id, 'kit') !== false || strpos($id, 'supply') !== false || strpos($id, 'media') !== false || strpos($id, 'image') !== false) {
             $group = 'products';
         } elseif (strpos($id, 'economics') !== false || strpos($id, 'profit') !== false || strpos($id, 'revenue') !== false || strpos($id, 'guidelines') !== false) {
             $group = 'economics';
@@ -714,6 +736,26 @@ class Plugin
             ],
             'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
         ]);
+
+        wp_register_ability('hp-abilities/image-settings', [
+            'label'               => 'Image Settings',
+            'description'         => 'Get or set image preparation settings (target size, padding, bg aggressiveness, naming)',
+            'category'            => 'hp-admin',
+            'execute_callback'    => [ProductManager::class, 'imageSettings'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'input_schema'        => [
+                'type'       => 'object',
+                'properties' => [
+                    'action'         => ['type' => 'string', 'description' => 'Action: get or set', 'enum' => ['get', 'set']],
+                    'target_size'    => ['type' => 'integer', 'description' => 'Canvas size in pixels (for set action)'],
+                    'padding'        => ['type' => 'number', 'description' => 'Padding percent 0-0.5 (for set action)'],
+                    'aggressiveness' => ['type' => 'integer', 'description' => 'BG removal aggressiveness 1-100 (for set action)'],
+                    'naming'         => ['type' => 'string', 'description' => 'Naming pattern with {sku}, {angle}, {timestamp} (for set action)'],
+                ],
+                'required'   => ['action'],
+            ],
+            'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
     }
 
     private static function register_order_abilities(): void
@@ -1134,6 +1176,12 @@ class Plugin
         $prod_ck = get_option('hp_abilities_prod_ck', '');
         $prod_cs = get_option('hp_abilities_prod_cs', '');
 
+        // Fetch image settings
+        $image_target_size = get_option('hp_abilities_image_target_size', 1100);
+        $image_padding = get_option('hp_abilities_image_padding', 0.05);
+        $image_aggressiveness = get_option('hp_abilities_image_aggressiveness', 50);
+        $image_naming = get_option('hp_abilities_image_naming', '{sku}-{angle}');
+
         $stg_key = ($stg_ck && $stg_cs) ? "{$stg_ck}:{$stg_cs}" : 'YOUR_STAGING_API_KEY_HERE';
         $prod_key = ($prod_ck && $prod_cs) ? "{$prod_ck}:{$prod_cs}" : 'YOUR_PRODUCTION_API_KEY_HERE';
 
@@ -1285,8 +1333,51 @@ class Plugin
                                     <td><input name="hp_abilities_prod_cs" type="password" id="hp_abilities_prod_cs" value="<?php echo esc_attr($prod_cs); ?>" class="regular-text" style="width: 100%;" placeholder="cs_..."></td>
                                 </tr>
                             </table>
-                            <?php submit_button(); ?>
                         </div>
+
+                        <!-- Image Preparation Settings -->
+                        <div class="card" style="margin-top: 20px; max-width: none; border-left: 4px solid #7e5bef;">
+                            <h2><?php echo esc_html__('Image Preparation Settings', 'hp-abilities'); ?></h2>
+                            <p style="color: #666; font-size: 12px;"><?php echo esc_html__('Configure AI-powered product image processing (bg removal, sizing, centering).', 'hp-abilities'); ?></p>
+                            <table class="form-table">
+                                <tr>
+                                    <th scope="row" style="width: 180px;"><label for="hp_abilities_image_target_size"><?php echo esc_html__('Canvas Size (px)', 'hp-abilities'); ?></label></th>
+                                    <td>
+                                        <input name="hp_abilities_image_target_size" type="number" id="hp_abilities_image_target_size" value="<?php echo esc_attr($image_target_size); ?>" class="small-text" min="400" max="2400" step="100">
+                                        <span class="description"><?php echo esc_html__('Output image dimensions (square). Default: 1100', 'hp-abilities'); ?></span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="hp_abilities_image_padding"><?php echo esc_html__('Padding %', 'hp-abilities'); ?></label></th>
+                                    <td>
+                                        <input name="hp_abilities_image_padding" type="number" id="hp_abilities_image_padding" value="<?php echo esc_attr($image_padding); ?>" class="small-text" min="0" max="0.5" step="0.01">
+                                        <span class="description"><?php echo esc_html__('Space around product. 0.05 = 5% margin each side. Default: 0.05', 'hp-abilities'); ?></span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="hp_abilities_image_aggressiveness"><?php echo esc_html__('BG Removal Aggressiveness', 'hp-abilities'); ?></label></th>
+                                    <td>
+                                        <input name="hp_abilities_image_aggressiveness" type="range" id="hp_abilities_image_aggressiveness" value="<?php echo esc_attr($image_aggressiveness); ?>" min="1" max="100" style="width: 200px; vertical-align: middle;">
+                                        <span id="aggressiveness_value" style="display: inline-block; width: 35px; text-align: center; font-weight: bold;"><?php echo esc_html($image_aggressiveness); ?></span>
+                                        <span class="description"><?php echo esc_html__('1=gentle (preserve edges), 100=aggressive (hard cutoff)', 'hp-abilities'); ?></span>
+                                        <script>
+                                            document.getElementById('hp_abilities_image_aggressiveness').addEventListener('input', function(e) {
+                                                document.getElementById('aggressiveness_value').textContent = e.target.value;
+                                            });
+                                        </script>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="hp_abilities_image_naming"><?php echo esc_html__('Naming Pattern', 'hp-abilities'); ?></label></th>
+                                    <td>
+                                        <input name="hp_abilities_image_naming" type="text" id="hp_abilities_image_naming" value="<?php echo esc_attr($image_naming); ?>" class="regular-text" placeholder="{sku}-{angle}">
+                                        <span class="description"><?php echo esc_html__('Variables: {sku}, {angle}, {timestamp}', 'hp-abilities'); ?></span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                            
+                        <?php submit_button(); ?>
                     </form>
 
                     <!-- Dynamic Tool List -->

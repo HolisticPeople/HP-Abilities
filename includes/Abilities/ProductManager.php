@@ -874,4 +874,67 @@ class ProductManager
             'is_thumbnail'  => $is_thumbnail,
         ];
     }
+
+    /**
+     * Get or set image preparation settings.
+     * Used by image-prep.js to sync settings from WordPress.
+     */
+    public static function imageSettings(array $input): array
+    {
+        $action = isset($input['action']) ? sanitize_text_field($input['action']) : 'get';
+
+        if ($action === 'get') {
+            return [
+                'success'        => true,
+                'target_size'    => (int) get_option('hp_abilities_image_target_size', 1100),
+                'padding'        => (float) get_option('hp_abilities_image_padding', 0.05),
+                'aggressiveness' => (int) get_option('hp_abilities_image_aggressiveness', 50),
+                'naming'         => get_option('hp_abilities_image_naming', '{sku}-{angle}'),
+            ];
+        }
+
+        if ($action === 'set') {
+            $updated = [];
+
+            if (isset($input['target_size'])) {
+                $val = max(400, min(2400, absint($input['target_size'])));
+                update_option('hp_abilities_image_target_size', $val);
+                $updated['target_size'] = $val;
+            }
+
+            if (isset($input['padding'])) {
+                $val = max(0, min(0.5, floatval($input['padding'])));
+                update_option('hp_abilities_image_padding', $val);
+                $updated['padding'] = $val;
+            }
+
+            if (isset($input['aggressiveness'])) {
+                $val = max(1, min(100, absint($input['aggressiveness'])));
+                update_option('hp_abilities_image_aggressiveness', $val);
+                $updated['aggressiveness'] = $val;
+            }
+
+            if (isset($input['naming'])) {
+                $val = sanitize_text_field($input['naming']);
+                update_option('hp_abilities_image_naming', $val);
+                $updated['naming'] = $val;
+            }
+
+            return [
+                'success' => true,
+                'updated' => $updated,
+                'current' => [
+                    'target_size'    => (int) get_option('hp_abilities_image_target_size', 1100),
+                    'padding'        => (float) get_option('hp_abilities_image_padding', 0.05),
+                    'aggressiveness' => (int) get_option('hp_abilities_image_aggressiveness', 50),
+                    'naming'         => get_option('hp_abilities_image_naming', '{sku}-{angle}'),
+                ],
+            ];
+        }
+
+        return [
+            'success' => false,
+            'error'   => __('Invalid action. Use "get" or "set".', 'hp-abilities'),
+        ];
+    }
 }
