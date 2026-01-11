@@ -889,7 +889,6 @@ class ProductManager
                 'target_size'    => (int) get_option('hp_abilities_image_target_size', 1100),
                 'padding'        => (float) get_option('hp_abilities_image_padding', 0.05),
                 'aggressiveness' => (int) get_option('hp_abilities_image_aggressiveness', 50),
-                'smoothing'      => (int) get_option('hp_abilities_image_smoothing', 0),
                 'naming'         => get_option('hp_abilities_image_naming', '{sku}-{angle}'),
             ];
         }
@@ -921,12 +920,6 @@ class ProductManager
                 $updated['naming'] = $val;
             }
 
-            if (isset($input['smoothing'])) {
-                $val = max(0, min(20, absint($input['smoothing'])));
-                update_option('hp_abilities_image_smoothing', $val);
-                $updated['smoothing'] = $val;
-            }
-
             return [
                 'success' => true,
                 'updated' => $updated,
@@ -934,7 +927,6 @@ class ProductManager
                     'target_size'    => (int) get_option('hp_abilities_image_target_size', 1100),
                     'padding'        => (float) get_option('hp_abilities_image_padding', 0.05),
                     'aggressiveness' => (int) get_option('hp_abilities_image_aggressiveness', 50),
-                    'smoothing'      => (int) get_option('hp_abilities_image_smoothing', 0),
                     'naming'         => get_option('hp_abilities_image_naming', '{sku}-{angle}'),
                 ],
             ];

@@ -85,8 +85,9 @@ function extractEdges(alphaData, width, height) {
 }
 
 /**
- * Correct bottle shape by enforcing straight vertical lines for the body
- * and smooth curves for top and bottom.
+ * Minimally correct bottle edges - only fix obvious deviations.
+ * Finds the expected straight line for the body and only adjusts
+ * pixels that deviate significantly (inward dips).
  * 
  * @param {Object} edges - { leftEdge, rightEdge, topY, bottomY }
  * @param {number} height - Image height
@@ -101,66 +102,44 @@ function correctBottleShape(edges, height) {
     
     const contentHeight = bottomY - topY;
     
-    // Define regions (approximate bottle anatomy)
-    const capEnd = topY + Math.round(contentHeight * 0.15);     // Top 15% = cap
-    const bodyStart = topY + Math.round(contentHeight * 0.20);  // Body starts at 20%
+    // Define body region (middle portion where sides should be straight)
+    const bodyStart = topY + Math.round(contentHeight * 0.25);  // Body starts at 25%
     const bodyEnd = topY + Math.round(contentHeight * 0.85);    // Body ends at 85%
-    const bottomStart = topY + Math.round(contentHeight * 0.85); // Bottom 15%
     
-    // Calculate the median edge position in the body region for straight lines
-    const bodyLeftEdges = [];
-    const bodyRightEdges = [];
+    // Calculate the expected edge position (use rightmost for left, leftmost for right)
+    // This finds where the edge SHOULD be if it were straight
+    let expectedLeft = -1;
+    let expectedRight = -1;
     
     for (let y = bodyStart; y <= bodyEnd; y++) {
-        if (leftEdge[y] >= 0) bodyLeftEdges.push(leftEdge[y]);
-        if (rightEdge[y] >= 0) bodyRightEdges.push(rightEdge[y]);
+        if (leftEdge[y] >= 0) {
+            // Left edge: the correct position is the LEFTMOST (smallest x)
+            if (expectedLeft < 0 || leftEdge[y] < expectedLeft) {
+                expectedLeft = leftEdge[y];
+            }
+        }
+        if (rightEdge[y] >= 0) {
+            // Right edge: the correct position is the RIGHTMOST (largest x)
+            if (expectedRight < 0 || rightEdge[y] > expectedRight) {
+                expectedRight = rightEdge[y];
+            }
+        }
     }
     
-    if (bodyLeftEdges.length === 0 || bodyRightEdges.length === 0) {
-        return edges; // Not enough data
-    }
-    
-    // Use median for robust straight line (ignores outliers from AI errors)
-    bodyLeftEdges.sort((a, b) => a - b);
-    bodyRightEdges.sort((a, b) => a - b);
-    
-    const medianLeft = bodyLeftEdges[Math.floor(bodyLeftEdges.length / 2)];
-    const medianRight = bodyRightEdges[Math.floor(bodyRightEdges.length / 2)];
-    
-    // Create corrected edges
+    // Create corrected edges - only fix inward deviations in body region
     const correctedLeft = [...leftEdge];
     const correctedRight = [...rightEdge];
     
-    // Apply straight lines to body region
+    // Only correct pixels that are INWARD from where they should be
+    // (i.e., the AI incorrectly cut into the bottle)
     for (let y = bodyStart; y <= bodyEnd; y++) {
-        if (correctedLeft[y] >= 0) correctedLeft[y] = medianLeft;
-        if (correctedRight[y] >= 0) correctedRight[y] = medianRight;
-    }
-    
-    // Smooth transition from cap to body (top curve)
-    for (let y = capEnd; y < bodyStart; y++) {
-        if (correctedLeft[y] >= 0 && correctedLeft[capEnd] >= 0) {
-            const t = (y - capEnd) / (bodyStart - capEnd);
-            correctedLeft[y] = Math.round(correctedLeft[capEnd] + t * (medianLeft - correctedLeft[capEnd]));
+        // Left edge: if current position is to the RIGHT of expected, it's an inward dip - fix it
+        if (correctedLeft[y] >= 0 && expectedLeft >= 0 && correctedLeft[y] > expectedLeft) {
+            correctedLeft[y] = expectedLeft;
         }
-        if (correctedRight[y] >= 0 && correctedRight[capEnd] >= 0) {
-            const t = (y - capEnd) / (bodyStart - capEnd);
-            correctedRight[y] = Math.round(correctedRight[capEnd] + t * (medianRight - correctedRight[capEnd]));
-        }
-    }
-    
-    // Smooth transition from body to bottom (bottom curve)
-    for (let y = bodyEnd + 1; y <= bottomY; y++) {
-        if (correctedLeft[y] >= 0) {
-            const t = (y - bodyEnd) / (bottomY - bodyEnd);
-            // Curve inward slightly toward center at bottom
-            const centerX = (medianLeft + medianRight) / 2;
-            correctedLeft[y] = Math.round(medianLeft + t * (centerX - medianLeft) * 0.3);
-        }
-        if (correctedRight[y] >= 0) {
-            const t = (y - bodyEnd) / (bottomY - bodyEnd);
-            const centerX = (medianLeft + medianRight) / 2;
-            correctedRight[y] = Math.round(medianRight + t * (centerX - medianRight) * 0.3);
+        // Right edge: if current position is to the LEFT of expected, it's an inward dip - fix it
+        if (correctedRight[y] >= 0 && expectedRight >= 0 && correctedRight[y] < expectedRight) {
+            correctedRight[y] = expectedRight;
         }
     }
     
