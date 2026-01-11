@@ -3,6 +3,7 @@
  * 
  * Allows the agent to apply targeted pixel edits to a mask image.
  * Uses colors from the ORIGINAL source image to preserve product colors.
+ * Smart detection: only fills pixels where the original has PRODUCT (not background).
  * 
  * Usage:
  *   node bin/edit-mask.js --mask mask.png --original source.png --left-edge 222 --from-row 200 --to-row 350
@@ -11,8 +12,9 @@
  * 
  * Parameters:
  *   --mask          The mask/cutout image to edit
- *   --original      The original source image (for color sampling)
+ *   --original      The original source image (for color sampling and bg detection)
  *   --blend-zone    Extra pixels to overwrite beyond edge (default: 5)
+ *   --bg-threshold  Color distance threshold for background detection (default: 50)
  * 
  * Operations:
  *   --left-edge X    Set left edge to X for rows from-row to to-row
@@ -44,8 +46,9 @@ async function editMask() {
         }
     }
 
-    const { mask, original, left_edge, right_edge, from_row, to_row, fill_rect, clear_rect, x1, y1, x2, y2, blend_zone } = params;
+    const { mask, original, left_edge, right_edge, from_row, to_row, fill_rect, clear_rect, x1, y1, x2, y2, blend_zone, bg_threshold } = params;
     const blendZone = parseInt(blend_zone, 10) || 5;
+    const bgThreshold = parseInt(bg_threshold, 10) || 50;
 
     if (!mask) {
         console.error(JSON.stringify({ success: false, error: 'Missing --mask parameter' }));
@@ -93,13 +96,74 @@ async function editMask() {
         }
 
         let pixelsChanged = 0;
+        let pixelsSkipped = 0;
+
+        // Detect background color from corners of the original
+        let bgColor = { r: 230, g: 230, b: 230 }; // Default light gray
+        if (hasOriginal && origData) {
+            // Sample corners (10x10 area from each corner)
+            const samples = [];
+            const sampleSize = 10;
+            
+            // Top-left
+            for (let y = 0; y < sampleSize; y++) {
+                for (let x = 0; x < sampleSize; x++) {
+                    const idx = (y * width + x) * 4;
+                    samples.push({ r: origData[idx], g: origData[idx + 1], b: origData[idx + 2] });
+                }
+            }
+            // Top-right
+            for (let y = 0; y < sampleSize; y++) {
+                for (let x = width - sampleSize; x < width; x++) {
+                    const idx = (y * width + x) * 4;
+                    samples.push({ r: origData[idx], g: origData[idx + 1], b: origData[idx + 2] });
+                }
+            }
+            
+            // Average the samples
+            const avgR = Math.round(samples.reduce((s, c) => s + c.r, 0) / samples.length);
+            const avgG = Math.round(samples.reduce((s, c) => s + c.g, 0) / samples.length);
+            const avgB = Math.round(samples.reduce((s, c) => s + c.b, 0) / samples.length);
+            bgColor = { r: avgR, g: avgG, b: avgB };
+        }
 
         console.error(`Mask: ${width}x${height}, Blend zone: ${blendZone}px, Original: ${hasOriginal ? 'yes' : 'no'}`);
+        console.error(`Background color detected: RGB(${bgColor.r}, ${bgColor.g}, ${bgColor.b}), threshold: ${bgThreshold}`);
+
+        /**
+         * Calculate color distance between two RGB colors
+         */
+        function colorDistance(r1, g1, b1, r2, g2, b2) {
+            return Math.sqrt(
+                Math.pow(r1 - r2, 2) +
+                Math.pow(g1 - g2, 2) +
+                Math.pow(b1 - b2, 2)
+            );
+        }
+
+        /**
+         * Check if a pixel in the original is background (not product)
+         */
+        function isBackground(x, y) {
+            if (!hasOriginal || !origData) return false;
+            const idx = (y * width + x) * 4;
+            const r = origData[idx];
+            const g = origData[idx + 1];
+            const b = origData[idx + 2];
+            const dist = colorDistance(r, g, b, bgColor.r, bgColor.g, bgColor.b);
+            return dist < bgThreshold;
+        }
 
         /**
          * Fill a pixel with original colors or white fallback
+         * Returns true if filled, false if skipped (was background)
          */
         function fillPixel(x, y) {
+            // Skip if this is background in the original
+            if (isBackground(x, y)) {
+                return false;
+            }
+
             const idx = (y * width + x) * 4;
             if (hasOriginal && origData) {
                 // Use original image colors
@@ -113,6 +177,7 @@ async function editMask() {
                 data[idx + 2] = 255;
             }
             data[idx + 3] = 255; // Fully opaque
+            return true;
         }
 
         // Left edge operation
@@ -138,8 +203,11 @@ async function editMask() {
                     // Fill from target to currentLeft + blendZone (overwrite blended edge pixels too)
                     const fillEnd = Math.min(currentLeft + blendZone, width - 1);
                     for (let x = targetX; x <= fillEnd; x++) {
-                        fillPixel(x, y);
-                        pixelsChanged++;
+                        if (fillPixel(x, y)) {
+                            pixelsChanged++;
+                        } else {
+                            pixelsSkipped++;
+                        }
                     }
                 }
                 // If current left is to the left of target, clear pixels up to target
@@ -176,8 +244,11 @@ async function editMask() {
                     // Fill from currentRight - blendZone to target
                     const fillStart = Math.max(currentRight - blendZone, 0);
                     for (let x = fillStart; x <= targetX && x < width; x++) {
-                        fillPixel(x, y);
-                        pixelsChanged++;
+                        if (fillPixel(x, y)) {
+                            pixelsChanged++;
+                        } else {
+                            pixelsSkipped++;
+                        }
                     }
                 }
                 // If current right is to the right of target, clear pixels
@@ -203,8 +274,11 @@ async function editMask() {
             for (let y = rectY1; y <= rectY2 && y < height; y++) {
                 for (let x = rectX1; x <= rectX2 && x < width; x++) {
                     if (x >= 0 && y >= 0) {
-                        fillPixel(x, y);
-                        pixelsChanged++;
+                        if (fillPixel(x, y)) {
+                            pixelsChanged++;
+                        } else {
+                            pixelsSkipped++;
+                        }
                     }
                 }
             }
@@ -235,12 +309,17 @@ async function editMask() {
             raw: { width, height, channels: 4 }
         }).png().toFile(mask);
 
+        console.error(`Pixels changed: ${pixelsChanged}, Pixels skipped (background): ${pixelsSkipped}`);
+
         console.log(JSON.stringify({
             success: true,
             mask,
             original: original || null,
             pixels_changed: pixelsChanged,
+            pixels_skipped_background: pixelsSkipped,
             blend_zone: blendZone,
+            bg_threshold: bgThreshold,
+            bg_color: bgColor,
             dimensions: { width, height }
         }));
 

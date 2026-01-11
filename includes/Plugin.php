@@ -248,38 +248,96 @@ class Plugin
     public static function get_default_correction_prompt(): string
     {
         return <<<'PROMPT'
-MASK CORRECTION INSTRUCTIONS
+MASK CORRECTION INSTRUCTIONS FOR PRODUCT IMAGES
 
-When evaluating a product image mask, follow these steps:
+You are correcting AI-generated masks for supplement bottle images. The AI struggles with 
+TRANSITION ZONES where different product parts meet (label-to-body, cap-to-body) especially 
+when colors are similar to the background.
 
-1. IDENTIFY PROBLEM ZONES
-   Compare the original image to the mask. Focus on areas where:
-   - Product color is similar to background color (light on light, dark on dark)
-   - Labels, caps, or packaging blend with the background
-   - Edges appear "melted" or irregular where they should be straight/smooth
+== STEP 1: VISUAL ANALYSIS ==
 
-2. ANALYZE THE ORIGINAL IMAGE
-   Before correcting, determine:
-   - Where does the problematic region start and end (row numbers)?
-   - What should the correct edge position be (x coordinate)?
-   - Is the problem: inward dip, alpha spill, or both?
+Look at the ORIGINAL image and identify:
+- WHERE are the TRUE product edges? (Not where the AI cut, but where product actually ends)
+- WHAT is the product geometry? (Bottles have straight sides, curved shoulders, rounded caps)
+- WHERE are the TRANSITION ZONES? (Areas where label meets body, cap meets body)
 
-3. APPLY MINIMAL CORRECTIONS
-   - Only correct the specific problem region, not above or below
-   - Undershoot vertically: stop BEFORE natural curves begin
-   - For bottles: body sides should be straight, caps/bottoms are curved
-   - Never create sharp corners - if your line would hit a curve, stop short
+Common transition zones that confuse the AI:
+- Light label meeting dark bottle body (both against light background)
+- Dark cap meeting dark body
+- Reflective surfaces
+- Text/graphics near edges
 
-4. FIX ALPHA SPILLS
-   In areas where the product should be solid but shows transparency:
-   - Identify by comparing original (solid color) to mask (becoming darker)
-   - Ensure these pixels are fully opaque (alpha = 255)
-   - Common on: light labels, reflective surfaces, translucent packaging
+== STEP 2: FIND ANCHOR POINTS ==
 
-5. VERIFY BEFORE FINALIZING
-   - The corrected mask should look like the natural product shape
-   - No sharp corners or unnatural angles
-   - All solid product areas should be fully opaque
+Identify "good" edges where the AI did well:
+- ABOVE the problem: Where does the AI's edge become correct? (e.g., the dark bottle body)
+- BELOW the problem: Where is the edge correct? (e.g., the label's clean edge)
+
+These anchor points define where your correction should START and END.
+
+== STEP 3: DETERMINE EDGE POSITION ==
+
+Look at the original image at the anchor points:
+- At the GOOD areas, what is the X coordinate of the edge?
+- The edge position should be CONSISTENT (bottles have straight sides in the body)
+- Trace visually: where SHOULD the edge be in the problem zone?
+
+For bottles, the body sides are nearly vertical straight lines. If the label shows a clean 
+vertical edge at X=224, the body above it should also be at approximately X=224.
+
+== STEP 4: APPLY CORRECTION ==
+
+Use edit-mask.js with these considerations:
+
+1. EDGE CORRECTIONS (--left-edge or --right-edge):
+   - Set the edge to the position determined in Step 3
+   - --from-row: Start from the GOOD area (anchor point below)
+   - --to-row: End at the GOOD area (anchor point above)
+   - Use --blend-zone 5-10 to fix semi-transparent edge pixels
+
+2. THE TOOL WILL SKIP BACKGROUND PIXELS:
+   The tool automatically detects if a pixel in the original is background (similar to 
+   corner colors). It will NOT fill these pixels. This is correct behavior.
+   
+   If the tool skips too many pixels, the original image truly has background there - 
+   the AI correctly identified it, but cut too aggressively into the product.
+
+3. ITERATIVE PASSES:
+   - Run a correction
+   - View the result
+   - If issues remain, apply another targeted correction
+   - Repeat until clean
+
+== STEP 5: ORIENTATION AWARENESS ==
+
+Problems can occur on ANY edge:
+- LEFT edge: Product on right, background on left of edge line
+- RIGHT edge: Product on left, background on right of edge line  
+- TOP edge: Use --fill-rect for cap areas (--from-row/--to-row become --y1/--y2)
+- BOTTOM edge: Similar to top, use rectangle operations
+
+== STEP 6: COLOR COMBINATIONS ==
+
+The AI struggles most with LOW CONTRAST transitions:
+- Light label on light background → hard to see label edge
+- Dark body on dark background → hard to see body edge
+- Light cap on light background → cap may be clipped
+
+HIGH CONTRAST areas usually work well:
+- Dark body on light background → clean edge
+- Dark label text on white label → preserved
+
+Focus your corrections on the low-contrast transition zones.
+
+== STEP 7: VERIFY ==
+
+After corrections, the mask should:
+- Follow the natural product shape
+- Have no sudden jumps or dips in the edge
+- Have no sharp 90-degree corners (unless that's the actual product shape)
+- Transition smoothly from label to body to cap
+
+If the result still has issues, run another pass targeting the specific problem area.
 PROMPT;
     }
 
