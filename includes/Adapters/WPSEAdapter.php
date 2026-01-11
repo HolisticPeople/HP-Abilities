@@ -8,63 +8,36 @@ if (!defined('ABSPATH')) {
 /**
  * WP Sheet Editor Adapter
  * 
- * Provides a clean interface to WP Sheet Editor's internal API
- * for reading/writing ALL product fields including ACF.
+ * Provides comprehensive product field access by combining:
+ * - WordPress core post data
+ * - WooCommerce product data
+ * - ACF fields (via get_fields())
+ * - Yoast SEO meta
+ * - All post meta
+ * 
+ * Note: WPSE column registry is only available in admin context,
+ * so we use direct WordPress/ACF APIs for REST/MCP calls.
  */
 class WPSEAdapter
 {
     /**
-     * Check if WP Sheet Editor is available
+     * Check if we can access product fields
      */
     public static function isAvailable(): bool
     {
-        return function_exists('VGSE') && class_exists('WP_Sheet_Editor_Dist');
+        return function_exists('wc_get_product') && class_exists('WooCommerce');
     }
 
     /**
-     * Get WPSE instance
-     */
-    private static function getVGSE()
-    {
-        if (!self::isAvailable()) {
-            return null;
-        }
-        return VGSE();
-    }
-
-    /**
-     * Get all registered columns for a provider (e.g., 'product')
-     * 
-     * @param string $provider Post type or 'user', 'term'
-     * @return array Column definitions keyed by column name
-     */
-    public static function getColumnRegistry(string $provider = 'product'): array
-    {
-        $vgse = self::getVGSE();
-        if (!$vgse || !isset($vgse->columns)) {
-            return [];
-        }
-
-        $columns = $vgse->columns->get_provider_items($provider, true, true);
-        return is_array($columns) ? $columns : [];
-    }
-
-    /**
-     * Get all field values for a product
+     * Get all field values for a product - comprehensive extraction
      * 
      * @param int $product_id WooCommerce product ID
-     * @return array Associative array of field_name => value
+     * @return array Categorized fields: core, acf, seo, taxonomy, meta
      */
     public static function getProductFields(int $product_id): array
     {
-        $vgse = self::getVGSE();
-        if (!$vgse) {
-            return ['error' => 'WP Sheet Editor not available'];
-        }
-
-        $columns = self::getColumnRegistry('product');
-        if (empty($columns)) {
-            return ['error' => 'No columns registered for products'];
+        if (!self::isAvailable()) {
+            return ['error' => 'WooCommerce not available'];
         }
 
         $product = wc_get_product($product_id);
@@ -72,76 +45,219 @@ class WPSEAdapter
             return ['error' => 'Product not found'];
         }
 
-        // Create a mock post object for WPSE callbacks
         $post = get_post($product_id);
         
         $fields = [
-            'core' => [],
-            'acf' => [],
-            'seo' => [],
-            'taxonomy' => [],
-            'meta' => [],
+            'core' => self::getCoreFields($product, $post),
+            'acf' => self::getAcfFields($product_id),
+            'seo' => self::getSeoFields($product_id),
+            'taxonomy' => self::getTaxonomyFields($product_id),
+            'meta' => self::getFilteredMeta($product_id),
         ];
-
-        foreach ($columns as $column_key => $column_settings) {
-            $value = self::getFieldValue($product_id, $post, $column_key, $column_settings);
-            
-            // Categorize the field
-            $data_type = $column_settings['data_type'] ?? 'meta_data';
-            $is_acf = isset($column_settings['acf_field']);
-            $is_seo = strpos($column_key, '_yoast_wpseo') === 0 || strpos($column_key, 'wpseo_') === 0;
-            $is_taxonomy = $data_type === 'taxonomy';
-            $is_core = in_array($column_key, ['ID', 'post_title', 'post_content', 'post_excerpt', 'post_status', 'post_date', 'post_author', 'post_parent']);
-            
-            if ($is_core || in_array($column_key, ['_sku', '_regular_price', '_sale_price', '_stock', '_stock_status', '_weight', '_length', '_width', '_height'])) {
-                $fields['core'][$column_key] = $value;
-            } elseif ($is_acf) {
-                $fields['acf'][$column_key] = $value;
-            } elseif ($is_seo) {
-                $fields['seo'][$column_key] = $value;
-            } elseif ($is_taxonomy) {
-                $fields['taxonomy'][$column_key] = $value;
-            } else {
-                $fields['meta'][$column_key] = $value;
-            }
-        }
 
         return $fields;
     }
 
     /**
-     * Get a single field value using WPSE's callback system
+     * Get core WooCommerce/WordPress fields
      */
-    private static function getFieldValue(int $product_id, $post, string $column_key, array $column_settings)
+    private static function getCoreFields($product, $post): array
     {
-        $vgse = self::getVGSE();
-        
-        // Use custom callback if defined
-        if (!empty($column_settings['get_value_callback']) && is_callable($column_settings['get_value_callback'])) {
-            return call_user_func($column_settings['get_value_callback'], $post, $column_key, $column_settings);
+        return [
+            'ID' => $product->get_id(),
+            'post_title' => $post->post_title,
+            'post_content' => $post->post_content,
+            'post_excerpt' => $post->post_excerpt,
+            'post_status' => $post->post_status,
+            'post_date' => $post->post_date,
+            'post_name' => $post->post_name,
+            '_sku' => $product->get_sku(),
+            '_regular_price' => $product->get_regular_price(),
+            '_sale_price' => $product->get_sale_price(),
+            '_price' => $product->get_price(),
+            '_stock' => $product->get_stock_quantity(),
+            '_stock_status' => $product->get_stock_status(),
+            '_manage_stock' => $product->get_manage_stock() ? 'yes' : 'no',
+            '_weight' => $product->get_weight(),
+            '_length' => $product->get_length(),
+            '_width' => $product->get_width(),
+            '_height' => $product->get_height(),
+            '_thumbnail_id' => $product->get_image_id(),
+            '_virtual' => $product->is_virtual() ? 'yes' : 'no',
+            '_downloadable' => $product->is_downloadable() ? 'yes' : 'no',
+            '_tax_status' => $product->get_tax_status(),
+            '_tax_class' => $product->get_tax_class(),
+            '_purchase_note' => $product->get_purchase_note(),
+            '_featured' => $product->is_featured() ? 'yes' : 'no',
+        ];
+    }
+
+    /**
+     * Get all ACF fields for a product
+     */
+    private static function getAcfFields(int $product_id): array
+    {
+        if (!function_exists('get_fields')) {
+            return [];
         }
 
-        // Handle different data types
-        $data_type = $column_settings['data_type'] ?? 'meta_data';
-        
-        switch ($data_type) {
-            case 'post_data':
-                return $vgse->data_helpers->get_post_data($column_key, $product_id);
-                
-            case 'meta_data':
-                return get_post_meta($product_id, $column_key, true);
-                
-            case 'taxonomy':
-                $taxonomy = $column_settings['taxonomy'] ?? '';
-                if ($taxonomy) {
-                    $terms = wp_get_object_terms($product_id, $taxonomy, ['fields' => 'names']);
-                    return is_array($terms) ? implode(', ', $terms) : '';
-                }
-                return '';
-                
-            default:
-                return get_post_meta($product_id, $column_key, true);
+        $acf_fields = get_fields($product_id);
+        if (!is_array($acf_fields)) {
+            return [];
         }
+
+        // Flatten complex values for display
+        $result = [];
+        foreach ($acf_fields as $key => $value) {
+            if (is_array($value)) {
+                // Handle arrays (multi-select, repeater, etc.)
+                if (self::isAssociativeArray($value)) {
+                    // Associative array - serialize as JSON
+                    $result[$key] = json_encode($value);
+                } else {
+                    // Sequential array - join with comma
+                    $result[$key] = implode(', ', array_map(function($v) {
+                        return is_array($v) ? json_encode($v) : $v;
+                    }, $value));
+                }
+            } elseif (is_object($value)) {
+                // Objects (post, user, etc.)
+                if (isset($value->ID)) {
+                    $result[$key] = $value->ID;
+                } else {
+                    $result[$key] = json_encode($value);
+                }
+            } else {
+                $result[$key] = $value;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get Yoast SEO fields
+     */
+    private static function getSeoFields(int $product_id): array
+    {
+        return [
+            '_yoast_wpseo_title' => get_post_meta($product_id, '_yoast_wpseo_title', true),
+            '_yoast_wpseo_metadesc' => get_post_meta($product_id, '_yoast_wpseo_metadesc', true),
+            '_yoast_wpseo_focuskw' => get_post_meta($product_id, '_yoast_wpseo_focuskw', true),
+            '_yoast_wpseo_canonical' => get_post_meta($product_id, '_yoast_wpseo_canonical', true),
+            '_yoast_wpseo_meta-robots-noindex' => get_post_meta($product_id, '_yoast_wpseo_meta-robots-noindex', true),
+            '_yoast_wpseo_meta-robots-nofollow' => get_post_meta($product_id, '_yoast_wpseo_meta-robots-nofollow', true),
+        ];
+    }
+
+    /**
+     * Get taxonomy terms for a product
+     */
+    private static function getTaxonomyFields(int $product_id): array
+    {
+        $result = [];
+        
+        // Product categories
+        $cats = wp_get_object_terms($product_id, 'product_cat', ['fields' => 'names']);
+        $result['product_cat'] = is_array($cats) ? implode(', ', $cats) : '';
+        
+        // Product tags
+        $tags = wp_get_object_terms($product_id, 'product_tag', ['fields' => 'names']);
+        $result['product_tag'] = is_array($tags) ? implode(', ', $tags) : '';
+        
+        // Product attributes (simplified)
+        $product = wc_get_product($product_id);
+        if ($product) {
+            $attributes = $product->get_attributes();
+            foreach ($attributes as $attr_name => $attr) {
+                if (is_object($attr) && method_exists($attr, 'get_options')) {
+                    $options = $attr->get_options();
+                    if (is_array($options)) {
+                        // Get term names if taxonomy attribute
+                        if ($attr->is_taxonomy()) {
+                            $terms = [];
+                            foreach ($options as $term_id) {
+                                $term = get_term($term_id);
+                                if ($term && !is_wp_error($term)) {
+                                    $terms[] = $term->name;
+                                }
+                            }
+                            $result['attr_' . $attr_name] = implode(', ', $terms);
+                        } else {
+                            $result['attr_' . $attr_name] = implode(', ', $options);
+                        }
+                    }
+                }
+            }
+        }
+        
+        return $result;
+    }
+
+    /**
+     * Get filtered post meta (excluding internal/system keys)
+     */
+    private static function getFilteredMeta(int $product_id): array
+    {
+        $all_meta = get_post_meta($product_id);
+        $result = [];
+        
+        // Keys to exclude (internal, duplicates of core fields)
+        $exclude_patterns = [
+            '/^_wp_/',           // WordPress internal
+            '/^_edit_/',         // Edit locks
+            '/^_oembed/',        // Embed cache
+            '/^_transient/',     // Transients
+            '/^_yoast/',         // Yoast (handled separately)
+            '/^_sku$/',          // Core WC (handled separately)
+            '/^_price$/',
+            '/^_regular_price$/',
+            '/^_sale_price$/',
+            '/^_stock/',
+            '/^_weight$/',
+            '/^_length$/',
+            '/^_width$/',
+            '/^_height$/',
+            '/^_thumbnail_id$/',
+            '/^_virtual$/',
+            '/^_downloadable$/',
+            '/^_tax_/',
+            '/^_purchase_note$/',
+            '/^_featured$/',
+            '/^_manage_stock$/',
+            '/^_product_attributes$/', // Complex serialized data
+        ];
+        
+        foreach ($all_meta as $key => $values) {
+            // Skip excluded patterns
+            $skip = false;
+            foreach ($exclude_patterns as $pattern) {
+                if (preg_match($pattern, $key)) {
+                    $skip = true;
+                    break;
+                }
+            }
+            if ($skip) continue;
+            
+            // Get the first value (most meta is single)
+            $value = isset($values[0]) ? $values[0] : '';
+            
+            // Skip empty values
+            if ($value === '' || $value === null) continue;
+            
+            // Skip serialized data that's too complex
+            if (is_serialized($value)) {
+                $unserialized = maybe_unserialize($value);
+                if (is_array($unserialized) && count($unserialized) > 10) {
+                    continue; // Skip large arrays
+                }
+                $value = is_array($unserialized) ? json_encode($unserialized) : $value;
+            }
+            
+            $result[$key] = $value;
+        }
+        
+        return $result;
     }
 
     /**
@@ -153,9 +269,8 @@ class WPSEAdapter
      */
     public static function setProductFields(int $product_id, array $fields): array
     {
-        $vgse = self::getVGSE();
-        if (!$vgse) {
-            return ['success' => false, 'error' => 'WP Sheet Editor not available'];
+        if (!self::isAvailable()) {
+            return ['success' => false, 'error' => 'WooCommerce not available'];
         }
 
         $product = wc_get_product($product_id);
@@ -163,12 +278,11 @@ class WPSEAdapter
             return ['success' => false, 'error' => 'Product not found'];
         }
 
-        $columns = self::getColumnRegistry('product');
         $updated = [];
         $errors = [];
 
         foreach ($fields as $field_name => $value) {
-            $result = self::setFieldValue($product_id, $field_name, $value, $columns);
+            $result = self::setFieldValue($product_id, $product, $field_name, $value);
             if ($result['success']) {
                 $updated[] = $field_name;
             } else {
@@ -176,7 +290,10 @@ class WPSEAdapter
             }
         }
 
-        // Clear WC product cache
+        // Save product changes
+        $product->save();
+
+        // Clear caches
         wc_delete_product_transients($product_id);
         clean_post_cache($product_id);
 
@@ -190,64 +307,78 @@ class WPSEAdapter
     /**
      * Set a single field value
      */
-    private static function setFieldValue(int $product_id, string $field_name, $value, array $columns): array
+    private static function setFieldValue(int $product_id, $product, string $field_name, $value): array
     {
-        $vgse = self::getVGSE();
-        
-        // Find column settings
-        $column_settings = $columns[$field_name] ?? null;
-        
-        // Use custom callback if defined
-        if ($column_settings && !empty($column_settings['save_value_callback']) && is_callable($column_settings['save_value_callback'])) {
-            try {
-                call_user_func($column_settings['save_value_callback'], $product_id, $field_name, $value, 'product', $column_settings, $columns);
-                return ['success' => true];
-            } catch (\Exception $e) {
-                return ['success' => false, 'error' => $e->getMessage()];
+        try {
+            // Core post fields
+            $post_fields = ['post_title', 'post_content', 'post_excerpt', 'post_status', 'post_name'];
+            if (in_array($field_name, $post_fields)) {
+                $result = wp_update_post([
+                    'ID' => $product_id,
+                    $field_name => $value
+                ], true);
+                return ['success' => !is_wp_error($result)];
             }
-        }
 
-        // Handle different field types
-        $data_type = $column_settings['data_type'] ?? 'meta_data';
-        
-        // Check if this is an ACF field
-        $is_acf = $column_settings && isset($column_settings['acf_field']);
-        
-        if ($is_acf && function_exists('update_field')) {
-            // Use ACF's update_field for proper handling
-            $result = update_field($field_name, $value, $product_id);
+            // WooCommerce core fields
+            $wc_setters = [
+                '_regular_price' => 'set_regular_price',
+                '_sale_price' => 'set_sale_price',
+                '_sku' => 'set_sku',
+                '_stock' => 'set_stock_quantity',
+                '_stock_status' => 'set_stock_status',
+                '_weight' => 'set_weight',
+                '_length' => 'set_length',
+                '_width' => 'set_width',
+                '_height' => 'set_height',
+                '_manage_stock' => 'set_manage_stock',
+                '_virtual' => 'set_virtual',
+                '_downloadable' => 'set_downloadable',
+                '_tax_status' => 'set_tax_status',
+                '_tax_class' => 'set_tax_class',
+                '_purchase_note' => 'set_purchase_note',
+            ];
+            
+            if (isset($wc_setters[$field_name]) && method_exists($product, $wc_setters[$field_name])) {
+                $method = $wc_setters[$field_name];
+                $product->$method($value);
+                return ['success' => true];
+            }
+
+            // Yoast SEO fields
+            if (strpos($field_name, '_yoast_wpseo') === 0) {
+                update_post_meta($product_id, $field_name, sanitize_text_field($value));
+                return ['success' => true];
+            }
+
+            // Taxonomy fields
+            if ($field_name === 'product_cat') {
+                $terms = array_map('trim', explode(',', $value));
+                $result = wp_set_object_terms($product_id, $terms, 'product_cat');
+                return ['success' => !is_wp_error($result)];
+            }
+            if ($field_name === 'product_tag') {
+                $terms = array_map('trim', explode(',', $value));
+                $result = wp_set_object_terms($product_id, $terms, 'product_tag');
+                return ['success' => !is_wp_error($result)];
+            }
+
+            // ACF fields (try ACF first, then fall back to meta)
+            if (function_exists('update_field')) {
+                // Check if this is an ACF field by trying to get field object
+                $field_object = acf_get_field($field_name);
+                if ($field_object) {
+                    update_field($field_name, $value, $product_id);
+                    return ['success' => true];
+                }
+            }
+
+            // Default: update as post meta
+            $result = update_post_meta($product_id, $field_name, $value);
             return ['success' => $result !== false];
-        }
 
-        switch ($data_type) {
-            case 'post_data':
-                // Core post fields
-                $post_data = ['ID' => $product_id];
-                $allowed_post_fields = ['post_title', 'post_content', 'post_excerpt', 'post_status', 'post_date', 'post_author', 'post_parent', 'post_name'];
-                if (in_array($field_name, $allowed_post_fields)) {
-                    $post_data[$field_name] = $value;
-                    $result = wp_update_post($post_data, true);
-                    return ['success' => !is_wp_error($result)];
-                }
-                return ['success' => false, 'error' => 'Invalid post field'];
-                
-            case 'meta_data':
-                $result = update_post_meta($product_id, $field_name, $value);
-                return ['success' => $result !== false];
-                
-            case 'taxonomy':
-                $taxonomy = $column_settings['taxonomy'] ?? '';
-                if ($taxonomy) {
-                    $terms = is_array($value) ? $value : array_map('trim', explode(',', $value));
-                    $result = wp_set_object_terms($product_id, $terms, $taxonomy);
-                    return ['success' => !is_wp_error($result)];
-                }
-                return ['success' => false, 'error' => 'Invalid taxonomy'];
-                
-            default:
-                // Default to meta_data
-                $result = update_post_meta($product_id, $field_name, $value);
-                return ['success' => $result !== false];
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
         }
     }
 
@@ -326,7 +457,7 @@ class WPSEAdapter
         }
 
         // Fields to always exclude (identifiers, timestamps)
-        $always_exclude = ['ID', '_sku', 'post_date', 'post_modified', '_edit_lock', '_edit_last'];
+        $always_exclude = ['ID', '_sku', 'post_date', 'post_modified', '_edit_lock', '_edit_last', 'post_name'];
         $exclude = array_merge($exclude, $always_exclude);
 
         $fields_to_copy = [];
@@ -364,26 +495,65 @@ class WPSEAdapter
     }
 
     /**
-     * Get a simplified list of available fields for a provider
+     * Get a simplified list of available fields for a product
      * 
-     * @param string $provider Post type
-     * @return array Field names with their types
+     * @param int $product_id Product ID to inspect
+     * @return array Field names with their categories
      */
     public static function getAvailableFields(string $provider = 'product'): array
     {
-        $columns = self::getColumnRegistry($provider);
-        $fields = [];
+        // Get a sample product to enumerate fields
+        $products = wc_get_products(['limit' => 1, 'status' => 'publish']);
+        
+        if (empty($products)) {
+            return [];
+        }
 
-        foreach ($columns as $key => $settings) {
-            $fields[$key] = [
-                'title' => $settings['title'] ?? $key,
-                'type' => $settings['type'] ?? 'text',
-                'data_type' => $settings['data_type'] ?? 'meta_data',
-                'is_acf' => isset($settings['acf_field']),
-                'is_readonly' => !empty($settings['is_locked']) || !empty($settings['formatted']['readOnly']),
-            ];
+        $sample_id = $products[0]->get_id();
+        $all_fields = self::getProductFields($sample_id);
+        
+        if (isset($all_fields['error'])) {
+            return [];
+        }
+
+        $fields = [];
+        $categories = ['core', 'acf', 'seo', 'taxonomy', 'meta'];
+
+        foreach ($categories as $category) {
+            $cat_fields = $all_fields[$category] ?? [];
+            foreach ($cat_fields as $key => $value) {
+                $fields[$key] = [
+                    'title' => self::humanizeFieldName($key),
+                    'category' => $category,
+                    'type' => gettype($value),
+                    'is_acf' => $category === 'acf',
+                    'is_readonly' => in_array($key, ['ID', 'post_date']),
+                ];
+            }
         }
 
         return $fields;
+    }
+
+    /**
+     * Convert field key to human-readable name
+     */
+    private static function humanizeFieldName(string $key): string
+    {
+        // Remove common prefixes
+        $name = preg_replace('/^(_yoast_wpseo_|_wc_|_)/', '', $key);
+        // Convert underscores/dashes to spaces
+        $name = str_replace(['_', '-'], ' ', $name);
+        // Title case
+        return ucwords($name);
+    }
+
+    /**
+     * Check if array is associative
+     */
+    private static function isAssociativeArray(array $arr): bool
+    {
+        if (empty($arr)) return false;
+        return array_keys($arr) !== range(0, count($arr) - 1);
     }
 }
