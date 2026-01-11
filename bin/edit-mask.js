@@ -2,17 +2,22 @@
  * Mask Editing Tool for HP Abilities
  * 
  * Allows the agent to apply targeted pixel edits to a mask image.
- * The agent inspects the mask, decides what needs fixing, then calls this tool.
+ * Uses colors from the ORIGINAL source image to preserve product colors.
  * 
  * Usage:
- *   node bin/edit-mask.js --mask temp/DH515-front-mask.png --left-edge 47 --from-row 200 --to-row 350
- *   node bin/edit-mask.js --mask temp/DH515-front-mask.png --right-edge 420 --from-row 100 --to-row 400
- *   node bin/edit-mask.js --mask temp/DH515-front-mask.png --fill-rect --x1 45 --y1 200 --x2 50 --y2 350
+ *   node bin/edit-mask.js --mask mask.png --original source.png --left-edge 222 --from-row 200 --to-row 350
+ *   node bin/edit-mask.js --mask mask.png --original source.png --right-edge 420 --from-row 100 --to-row 400 --blend-zone 8
+ *   node bin/edit-mask.js --mask mask.png --original source.png --fill-rect --x1 45 --y1 200 --x2 50 --y2 350
+ * 
+ * Parameters:
+ *   --mask          The mask/cutout image to edit
+ *   --original      The original source image (for color sampling)
+ *   --blend-zone    Extra pixels to overwrite beyond edge (default: 5)
  * 
  * Operations:
  *   --left-edge X    Set left edge to X for rows from-row to to-row
  *   --right-edge X   Set right edge to X for rows from-row to to-row
- *   --fill-rect      Fill a rectangle with opaque pixels
+ *   --fill-rect      Fill a rectangle with original colors
  *   --clear-rect     Clear a rectangle (make transparent)
  * 
  * The mask is edited in-place (overwritten).
@@ -39,7 +44,8 @@ async function editMask() {
         }
     }
 
-    const { mask, left_edge, right_edge, from_row, to_row, fill_rect, clear_rect, x1, y1, x2, y2 } = params;
+    const { mask, original, left_edge, right_edge, from_row, to_row, fill_rect, clear_rect, x1, y1, x2, y2, blend_zone } = params;
+    const blendZone = parseInt(blend_zone, 10) || 5;
 
     if (!mask) {
         console.error(JSON.stringify({ success: false, error: 'Missing --mask parameter' }));
@@ -51,6 +57,16 @@ async function editMask() {
         process.exit(1);
     }
 
+    // Original is required for color-preserving operations
+    let origData = null;
+    let hasOriginal = false;
+    
+    if (original && fs.existsSync(original)) {
+        hasOriginal = true;
+    } else if (original) {
+        console.error(`Warning: Original file not found: ${original}, using white fill`);
+    }
+
     try {
         // Load mask as raw RGBA
         const { data, info } = await sharp(mask)
@@ -59,9 +75,45 @@ async function editMask() {
             .toBuffer({ resolveWithObject: true });
 
         const { width, height } = info;
+        
+        // Load original image for color sampling if available
+        if (hasOriginal) {
+            const origResult = await sharp(original)
+                .ensureAlpha()
+                .raw()
+                .toBuffer({ resolveWithObject: true });
+            
+            // Verify dimensions match
+            if (origResult.info.width !== width || origResult.info.height !== height) {
+                console.error(`Warning: Original dimensions (${origResult.info.width}x${origResult.info.height}) don't match mask (${width}x${height})`);
+                hasOriginal = false;
+            } else {
+                origData = origResult.data;
+            }
+        }
+
         let pixelsChanged = 0;
 
-        console.error(`Mask: ${width}x${height}`);
+        console.error(`Mask: ${width}x${height}, Blend zone: ${blendZone}px, Original: ${hasOriginal ? 'yes' : 'no'}`);
+
+        /**
+         * Fill a pixel with original colors or white fallback
+         */
+        function fillPixel(x, y) {
+            const idx = (y * width + x) * 4;
+            if (hasOriginal && origData) {
+                // Use original image colors
+                data[idx] = origData[idx];         // R from original
+                data[idx + 1] = origData[idx + 1]; // G from original
+                data[idx + 2] = origData[idx + 2]; // B from original
+            } else {
+                // Fallback to white
+                data[idx] = 255;
+                data[idx + 1] = 255;
+                data[idx + 2] = 255;
+            }
+            data[idx + 3] = 255; // Fully opaque
+        }
 
         // Left edge operation
         if (left_edge !== undefined) {
@@ -69,10 +121,10 @@ async function editMask() {
             const startRow = parseInt(from_row, 10) || 0;
             const endRow = parseInt(to_row, 10) || height - 1;
 
-            console.error(`Setting left edge to x=${targetX} for rows ${startRow}-${endRow}`);
+            console.error(`Setting left edge to x=${targetX} for rows ${startRow}-${endRow} (with ${blendZone}px blend zone)`);
 
             for (let y = startRow; y <= endRow && y < height; y++) {
-                // Find current left edge
+                // Find current left edge (first pixel with any alpha)
                 let currentLeft = -1;
                 for (let x = 0; x < width; x++) {
                     if (data[(y * width + x) * 4 + 3] > 0) {
@@ -81,18 +133,16 @@ async function editMask() {
                     }
                 }
 
-                // If current left is to the right of target, fill in the gap
+                // If current left is to the right of target, fill in the gap + blend zone
                 if (currentLeft > targetX) {
-                    for (let x = targetX; x < currentLeft; x++) {
-                        const idx = (y * width + x) * 4;
-                        data[idx] = 255;     // R
-                        data[idx + 1] = 255; // G
-                        data[idx + 2] = 255; // B
-                        data[idx + 3] = 255; // A (opaque)
+                    // Fill from target to currentLeft + blendZone (overwrite blended edge pixels too)
+                    const fillEnd = Math.min(currentLeft + blendZone, width - 1);
+                    for (let x = targetX; x <= fillEnd; x++) {
+                        fillPixel(x, y);
                         pixelsChanged++;
                     }
                 }
-                // If current left is to the left of target, clear pixels
+                // If current left is to the left of target, clear pixels up to target
                 else if (currentLeft >= 0 && currentLeft < targetX) {
                     for (let x = currentLeft; x < targetX; x++) {
                         const idx = (y * width + x) * 4;
@@ -109,7 +159,7 @@ async function editMask() {
             const startRow = parseInt(from_row, 10) || 0;
             const endRow = parseInt(to_row, 10) || height - 1;
 
-            console.error(`Setting right edge to x=${targetX} for rows ${startRow}-${endRow}`);
+            console.error(`Setting right edge to x=${targetX} for rows ${startRow}-${endRow} (with ${blendZone}px blend zone)`);
 
             for (let y = startRow; y <= endRow && y < height; y++) {
                 // Find current right edge
@@ -121,14 +171,12 @@ async function editMask() {
                     }
                 }
 
-                // If current right is to the left of target, fill in the gap
+                // If current right is to the left of target, fill in the gap + blend zone
                 if (currentRight >= 0 && currentRight < targetX) {
-                    for (let x = currentRight + 1; x <= targetX && x < width; x++) {
-                        const idx = (y * width + x) * 4;
-                        data[idx] = 255;     // R
-                        data[idx + 1] = 255; // G
-                        data[idx + 2] = 255; // B
-                        data[idx + 3] = 255; // A (opaque)
+                    // Fill from currentRight - blendZone to target
+                    const fillStart = Math.max(currentRight - blendZone, 0);
+                    for (let x = fillStart; x <= targetX && x < width; x++) {
+                        fillPixel(x, y);
                         pixelsChanged++;
                     }
                 }
@@ -150,16 +198,12 @@ async function editMask() {
             const rectX2 = parseInt(x2, 10);
             const rectY2 = parseInt(y2, 10);
 
-            console.error(`Filling rectangle (${rectX1},${rectY1}) to (${rectX2},${rectY2})`);
+            console.error(`Filling rectangle (${rectX1},${rectY1}) to (${rectX2},${rectY2}) with original colors`);
 
             for (let y = rectY1; y <= rectY2 && y < height; y++) {
                 for (let x = rectX1; x <= rectX2 && x < width; x++) {
                     if (x >= 0 && y >= 0) {
-                        const idx = (y * width + x) * 4;
-                        data[idx] = 255;     // R
-                        data[idx + 1] = 255; // G
-                        data[idx + 2] = 255; // B
-                        data[idx + 3] = 255; // A (opaque)
+                        fillPixel(x, y);
                         pixelsChanged++;
                     }
                 }
@@ -194,7 +238,9 @@ async function editMask() {
         console.log(JSON.stringify({
             success: true,
             mask,
+            original: original || null,
             pixels_changed: pixelsChanged,
+            blend_zone: blendZone,
             dimensions: { width, height }
         }));
 
