@@ -6,19 +6,22 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * WP Sheet Editor Adapter
+ * Product Fields Adapter
  * 
  * Provides comprehensive product field access by combining:
  * - WordPress core post data
  * - WooCommerce product data
- * - ACF fields (via get_fields())
+ * - ACF Pro fields (via get_fields())
  * - Yoast SEO meta
  * - All post meta
  * 
- * Note: WPSE column registry is only available in admin context,
- * so we use direct WordPress/ACF APIs for REST/MCP calls.
+ * This adapter uses direct WordPress/ACF/Yoast APIs for reliable
+ * MCP/REST access without requiring any admin UI context.
+ * 
+ * @requires ACF Pro for custom field operations
+ * @requires Yoast SEO for SEO field operations
  */
-class WPSEAdapter
+class ProductFieldsAdapter
 {
     /**
      * Check if we can access product fields
@@ -94,6 +97,8 @@ class WPSEAdapter
 
     /**
      * Get all ACF fields for a product
+     * 
+     * @requires ACF Pro plugin
      */
     private static function getAcfFields(int $product_id): array
     {
@@ -137,6 +142,8 @@ class WPSEAdapter
 
     /**
      * Get Yoast SEO fields
+     * 
+     * @requires Yoast SEO plugin
      */
     private static function getSeoFields(int $product_id): array
     {
@@ -497,7 +504,7 @@ class WPSEAdapter
     /**
      * Get a simplified list of available fields for a product
      * 
-     * @param int $product_id Product ID to inspect
+     * @param string $provider Product type (default 'product')
      * @return array Field names with their categories
      */
     public static function getAvailableFields(string $provider = 'product'): array

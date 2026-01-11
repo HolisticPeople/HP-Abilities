@@ -499,11 +499,11 @@ class ProductManager
     }
 
     // =========================================================================
-    // WPSE-POWERED METHODS (WP Sheet Editor Integration)
+    // ACF-POWERED METHODS (Full Field Access)
     // =========================================================================
 
     /**
-     * Get ALL product fields via WP Sheet Editor.
+     * Get ALL product fields (core, ACF, SEO, taxonomy).
      */
     public static function getFullProduct(array $input): array
     {
@@ -518,11 +518,11 @@ class ProductManager
             return ['success' => false, 'error' => sprintf(__('Product with SKU "%s" not found', 'hp-abilities'), $sku)];
         }
 
-        if (!\HP_Abilities\Adapters\WPSEAdapter::isAvailable()) {
-            return ['success' => false, 'error' => __('WP Sheet Editor Pro is required for this operation', 'hp-abilities')];
+        if (!\HP_Abilities\Adapters\ProductFieldsAdapter::isAvailable()) {
+            return ['success' => false, 'error' => __('WooCommerce is required for this operation', 'hp-abilities')];
         }
 
-        $fields = \HP_Abilities\Adapters\WPSEAdapter::getProductFields($product_id);
+        $fields = \HP_Abilities\Adapters\ProductFieldsAdapter::getProductFields($product_id);
         
         if (isset($fields['error'])) {
             return ['success' => false, 'error' => $fields['error']];
@@ -543,7 +543,7 @@ class ProductManager
     }
 
     /**
-     * Compare two products field-by-field via WPSE.
+     * Compare two products field-by-field (core, ACF, SEO, taxonomy).
      */
     public static function compareProducts(array $input): array
     {
@@ -564,11 +564,11 @@ class ProductManager
             return ['success' => false, 'error' => sprintf(__('Target product with SKU "%s" not found', 'hp-abilities'), $target_sku)];
         }
 
-        if (!\HP_Abilities\Adapters\WPSEAdapter::isAvailable()) {
-            return ['success' => false, 'error' => __('WP Sheet Editor Pro is required for this operation', 'hp-abilities')];
+        if (!\HP_Abilities\Adapters\ProductFieldsAdapter::isAvailable()) {
+            return ['success' => false, 'error' => __('WooCommerce is required for this operation', 'hp-abilities')];
         }
 
-        $result = \HP_Abilities\Adapters\WPSEAdapter::compareProducts($source_id, $target_id);
+        $result = \HP_Abilities\Adapters\ProductFieldsAdapter::compareProducts($source_id, $target_id);
         
         if (!$result['success']) {
             return $result;
@@ -582,7 +582,7 @@ class ProductManager
     }
 
     /**
-     * Clone product fields from source to target via WPSE.
+     * Clone product fields from source to target (core, ACF, SEO, taxonomy).
      */
     public static function cloneProduct(array $input): array
     {
@@ -605,11 +605,11 @@ class ProductManager
             return ['success' => false, 'error' => sprintf(__('Target product with SKU "%s" not found', 'hp-abilities'), $target_sku)];
         }
 
-        if (!\HP_Abilities\Adapters\WPSEAdapter::isAvailable()) {
-            return ['success' => false, 'error' => __('WP Sheet Editor Pro is required for this operation', 'hp-abilities')];
+        if (!\HP_Abilities\Adapters\ProductFieldsAdapter::isAvailable()) {
+            return ['success' => false, 'error' => __('WooCommerce is required for this operation', 'hp-abilities')];
         }
 
-        $result = \HP_Abilities\Adapters\WPSEAdapter::cloneProductFields($source_id, $target_id, $overrides, $exclude);
+        $result = \HP_Abilities\Adapters\ProductFieldsAdapter::cloneProductFields($source_id, $target_id, $overrides, $exclude);
         
         // Add SKU info to the result
         $result['source_sku'] = $source_sku;
@@ -619,7 +619,7 @@ class ProductManager
     }
 
     /**
-     * Update product fields by human-readable name via WPSE.
+     * Update product fields by human-readable name (core, ACF, SEO, taxonomy).
      */
     public static function updateFields(array $input): array
     {
@@ -638,11 +638,11 @@ class ProductManager
             return ['success' => false, 'error' => sprintf(__('Product with SKU "%s" not found', 'hp-abilities'), $sku)];
         }
 
-        if (!\HP_Abilities\Adapters\WPSEAdapter::isAvailable()) {
-            return ['success' => false, 'error' => __('WP Sheet Editor Pro is required for this operation', 'hp-abilities')];
+        if (!\HP_Abilities\Adapters\ProductFieldsAdapter::isAvailable()) {
+            return ['success' => false, 'error' => __('WooCommerce is required for this operation', 'hp-abilities')];
         }
 
-        $result = \HP_Abilities\Adapters\WPSEAdapter::setProductFields($product_id, $fields);
+        $result = \HP_Abilities\Adapters\ProductFieldsAdapter::setProductFields($product_id, $fields);
         
         // Add context to the result
         $result['sku'] = $sku;
@@ -652,15 +652,15 @@ class ProductManager
     }
 
     /**
-     * Get list of available product fields from WPSE registry.
+     * Get list of available product fields (core, ACF, SEO, taxonomy).
      */
     public static function getAvailableFields(array $input): array
     {
-        if (!\HP_Abilities\Adapters\WPSEAdapter::isAvailable()) {
-            return ['success' => false, 'error' => __('WP Sheet Editor Pro is required for this operation', 'hp-abilities')];
+        if (!\HP_Abilities\Adapters\ProductFieldsAdapter::isAvailable()) {
+            return ['success' => false, 'error' => __('WooCommerce is required for this operation', 'hp-abilities')];
         }
 
-        $fields = \HP_Abilities\Adapters\WPSEAdapter::getAvailableFields('product');
+        $fields = \HP_Abilities\Adapters\ProductFieldsAdapter::getAvailableFields('product');
         
         // Group fields by type
         $grouped = [

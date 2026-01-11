@@ -8,7 +8,7 @@ use HP_Abilities\Abilities\CustomerLookup;
 use HP_Abilities\Abilities\OrderSearch;
 use HP_Abilities\Abilities\OrderStatus;
 use HP_Abilities\Abilities\Test;
-use HP_Abilities\Adapters\WPSEAdapter;
+use HP_Abilities\Adapters\ProductFieldsAdapter;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -231,7 +231,7 @@ class Plugin
 
         // Load Adapters
         $adapters_dir = HP_ABILITIES_PATH . 'includes/Adapters/';
-        require_once $adapters_dir . 'WPSEAdapter.php';
+        require_once $adapters_dir . 'ProductFieldsAdapter.php';
 
         // Load Utils
         $utils_dir = HP_ABILITIES_PATH . 'includes/Utils/';
@@ -602,13 +602,13 @@ class Plugin
         ]);
 
         // =========================================================================
-        // WPSE-POWERED TOOLS (WP Sheet Editor Integration)
-        // These tools use WP Sheet Editor to access ALL product fields
+        // ACF-POWERED TOOLS (Full Field Access)
+        // These tools use ACF Pro + Yoast to access ALL product fields
         // =========================================================================
 
         wp_register_ability('hp-abilities/products-get-full', [
             'label'               => 'Get Full Product Data',
-            'description'         => 'Get ALL product fields via WP Sheet Editor (core, ACF, SEO, taxonomy)',
+            'description'         => 'Get ALL product fields (core, ACF, SEO, taxonomy)',
             'category'            => 'hp-admin',
             'execute_callback'    => [ProductManager::class, 'getFullProduct'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
@@ -641,7 +641,7 @@ class Plugin
 
         wp_register_ability('hp-abilities/products-clone', [
             'label'               => 'Clone Product Fields',
-            'description'         => 'Copy ALL fields from source to target via WPSE with optional overrides',
+            'description'         => 'Copy ALL fields from source to target (core, ACF, SEO, taxonomy) with optional overrides',
             'category'            => 'hp-admin',
             'execute_callback'    => [ProductManager::class, 'cloneProduct'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
@@ -660,7 +660,7 @@ class Plugin
 
         wp_register_ability('hp-abilities/products-update-fields', [
             'label'               => 'Update Product Fields',
-            'description'         => 'Update ANY fields by human-readable name via WPSE (no field keys needed)',
+            'description'         => 'Update ANY fields by human-readable name (core, ACF, SEO, taxonomy)',
             'category'            => 'hp-admin',
             'execute_callback'    => [ProductManager::class, 'updateFields'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
@@ -677,7 +677,7 @@ class Plugin
 
         wp_register_ability('hp-abilities/products-available-fields', [
             'label'               => 'List Available Fields',
-            'description'         => 'Get list of all available product fields from WPSE registry',
+            'description'         => 'Get list of all available product fields (core, ACF, SEO, taxonomy)',
             'category'            => 'hp-admin',
             'execute_callback'    => [ProductManager::class, 'getAvailableFields'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
@@ -1544,16 +1544,16 @@ This protocol ensures all AI agents maintain the HP Abilities ecosystem correctl
 | `inventory-check` | Check stock levels |
 | `products-calculate-supply` | Calculate supply duration |
 
-### WPSE-Powered Tools (ALL Fields via WP Sheet Editor)
+### ACF-Powered Tools (ALL Fields via ACF Pro + Yoast)
 | Tool | Purpose |
 |------|---------|
 | `products-get-full` | Get ALL product fields (core, ACF, SEO, taxonomy) |
 | `products-compare` | Compare two products, see ALL differences |
 | `products-clone` | Copy ALL fields from source to target |
 | `products-update-fields` | Update ANY field by name (no field keys needed) |
-| `products-available-fields` | List all available fields from WPSE registry |
+| `products-available-fields` | List all available fields from product registry |
 
-**Use WPSE tools for product replacement workflows** - they ensure no fields are missed.
+**Use ACF-powered tools for product replacement workflows** - they ensure no fields are missed.
 
 ## 4. Implementation Standards
 - **Callbacks**: Use static methods in Ability classes (e.g., `ProductManager::createProduct`).
