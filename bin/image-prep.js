@@ -28,6 +28,7 @@ const DEFAULTS = {
     target_size: 1100,
     padding: 0.05,
     aggressiveness: 50,
+    smoothing: 0,
     naming: '{sku}-{angle}'
 };
 
@@ -61,6 +62,7 @@ function fetchSettingsFromWP() {
         const aggressiveness = parseInt(getOption('hp_abilities_image_aggressiveness'), 10);
         const target_size = parseInt(getOption('hp_abilities_image_target_size'), 10);
         const padding = parseFloat(getOption('hp_abilities_image_padding'));
+        const smoothing = parseInt(getOption('hp_abilities_image_smoothing'), 10);
         const naming = getOption('hp_abilities_image_naming');
         
         return {
@@ -68,12 +70,68 @@ function fetchSettingsFromWP() {
             aggressiveness: aggressiveness || DEFAULTS.aggressiveness,
             target_size: target_size || DEFAULTS.target_size,
             padding: isNaN(padding) ? DEFAULTS.padding : padding,
+            smoothing: isNaN(smoothing) ? DEFAULTS.smoothing : smoothing,
             naming: naming || DEFAULTS.naming
         };
     } catch (e) {
         console.error('Failed to fetch settings via SSH:', e.message);
         return null;
     }
+}
+
+/**
+ * Smooth a binary alpha mask using Gaussian blur + re-threshold.
+ * This creates smooth, predictable edges ideal for bottle shapes.
+ * 
+ * Smoothing controls blur radius:
+ * - 0 = no smoothing (original jagged edges)
+ * - 10 = moderate smoothing (good for most bottles)
+ * - 20 = heavy smoothing (very clean curves)
+ * 
+ * @param {Buffer} imageBuffer - RGBA image buffer
+ * @param {number} smoothingRadius - Pixels of blur (0-20)
+ * @returns {Buffer} - Image with smoothed alpha channel
+ */
+async function smoothMask(imageBuffer, smoothingRadius) {
+    if (!smoothingRadius || smoothingRadius <= 0) {
+        return imageBuffer;
+    }
+    
+    // Get image as raw RGBA
+    const { data, info } = await sharp(imageBuffer)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+    
+    const { width, height } = info;
+    
+    // Extract just the alpha channel
+    const alphaMask = Buffer.alloc(width * height);
+    for (let i = 0; i < width * height; i++) {
+        alphaMask[i] = data[i * 4 + 3];
+    }
+    
+    // Create a grayscale image from alpha, blur it, then threshold
+    // Blur radius needs to be odd, so we use smoothingRadius * 2 + 1 as sigma
+    const sigma = smoothingRadius;
+    
+    const blurredAlpha = await sharp(alphaMask, { raw: { width, height, channels: 1 } })
+        .blur(Math.max(0.3, sigma))  // sharp requires blur >= 0.3
+        .raw()
+        .toBuffer();
+    
+    // Re-threshold at 128 (50%) and apply back to image
+    const outputData = Buffer.alloc(width * height * 4);
+    for (let i = 0; i < width * height; i++) {
+        outputData[i * 4] = data[i * 4];         // R
+        outputData[i * 4 + 1] = data[i * 4 + 1]; // G
+        outputData[i * 4 + 2] = data[i * 4 + 2]; // B
+        outputData[i * 4 + 3] = blurredAlpha[i] >= 128 ? 255 : 0;  // Thresholded alpha
+    }
+    
+    return sharp(outputData, { raw: { width, height, channels: 4 } })
+        .png()
+        .toBuffer();
 }
 
 /**
@@ -288,9 +346,10 @@ async function prepareImage() {
                     target_size: wpSettings.target_size,
                     padding: wpSettings.padding,
                     aggressiveness: wpSettings.aggressiveness,
+                    smoothing: wpSettings.smoothing,
                     naming: wpSettings.naming
                 };
-                console.error(`✓ Settings from WP: aggressiveness=${settings.aggressiveness}, size=${settings.target_size}, padding=${settings.padding}`);
+                console.error(`✓ Settings from WP: aggressiveness=${settings.aggressiveness}, smoothing=${settings.smoothing}, size=${settings.target_size}, padding=${settings.padding}`);
             } else {
                 console.error('Failed to sync settings, using defaults');
             }
@@ -300,6 +359,7 @@ async function prepareImage() {
         if (params.target_size) settings.target_size = parseInt(params.target_size, 10);
         if (params.padding) settings.padding = parseFloat(params.padding);
         if (params.aggressiveness) settings.aggressiveness = parseInt(params.aggressiveness, 10);
+        if (params.smoothing) settings.smoothing = parseInt(params.smoothing, 10);
         if (params.naming) settings.naming = params.naming;
 
         let inputSource;
@@ -335,6 +395,12 @@ async function prepareImage() {
         // and use original image colors (not cutout colors which may be degraded)
         console.error(`Applying aggressiveness threshold: ${settings.aggressiveness}/100`);
         let cutoutBuffer = await applyThresholdedMaskToOriginal(originalBuffer, cutoutFromAI, settings.aggressiveness);
+
+        // 3. Apply edge smoothing if enabled (fixes jagged bottle edges)
+        if (settings.smoothing > 0) {
+            console.error(`Applying edge smoothing: ${settings.smoothing}px radius`);
+            cutoutBuffer = await smoothMask(cutoutBuffer, settings.smoothing);
+        }
 
         // 4. Trim and resize
         console.error('Trimming and resizing...');
@@ -384,6 +450,7 @@ async function prepareImage() {
                 target_size: settings.target_size,
                 padding: settings.padding,
                 aggressiveness: settings.aggressiveness,
+                smoothing: settings.smoothing,
                 naming: settings.naming
             }
         };

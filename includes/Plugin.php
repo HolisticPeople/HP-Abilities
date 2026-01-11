@@ -235,6 +235,11 @@ class Plugin
             'default'           => '{sku}-{angle}',
             'sanitize_callback' => 'sanitize_text_field',
         ]);
+        register_setting('hp_abilities_settings', 'hp_abilities_image_smoothing', [
+            'type'              => 'integer',
+            'default'           => 0,
+            'sanitize_callback' => function($val) { return max(0, min(20, absint($val))); },
+        ]);
     }
 
     /**
@@ -739,7 +744,7 @@ class Plugin
 
         wp_register_ability('hp-abilities/image-settings', [
             'label'               => 'Image Settings',
-            'description'         => 'Get or set image preparation settings (target size, padding, bg aggressiveness, naming)',
+            'description'         => 'Get or set image preparation settings (target size, padding, aggressiveness, smoothing, naming)',
             'category'            => 'hp-admin',
             'execute_callback'    => [ProductManager::class, 'imageSettings'],
             'permission_callback' => fn() => current_user_can('manage_woocommerce'),
@@ -750,6 +755,7 @@ class Plugin
                     'target_size'    => ['type' => 'integer', 'description' => 'Canvas size in pixels (for set action)'],
                     'padding'        => ['type' => 'number', 'description' => 'Padding percent 0-0.5 (for set action)'],
                     'aggressiveness' => ['type' => 'integer', 'description' => 'BG removal aggressiveness 1-100 (for set action)'],
+                    'smoothing'      => ['type' => 'integer', 'description' => 'Edge smoothing 0-20 pixels (for set action)'],
                     'naming'         => ['type' => 'string', 'description' => 'Naming pattern with {sku}, {angle}, {timestamp} (for set action)'],
                 ],
                 'required'   => ['action'],
@@ -1181,6 +1187,7 @@ class Plugin
         $image_padding = get_option('hp_abilities_image_padding', 0.05);
         $image_aggressiveness = get_option('hp_abilities_image_aggressiveness', 50);
         $image_naming = get_option('hp_abilities_image_naming', '{sku}-{angle}');
+        $image_smoothing = get_option('hp_abilities_image_smoothing', 0);
 
         $stg_key = ($stg_ck && $stg_cs) ? "{$stg_ck}:{$stg_cs}" : 'YOUR_STAGING_API_KEY_HERE';
         $prod_key = ($prod_ck && $prod_cs) ? "{$prod_ck}:{$prod_cs}" : 'YOUR_PRODUCTION_API_KEY_HERE';
@@ -1372,6 +1379,19 @@ class Plugin
                                     <td>
                                         <input name="hp_abilities_image_naming" type="text" id="hp_abilities_image_naming" value="<?php echo esc_attr($image_naming); ?>" class="regular-text" placeholder="{sku}-{angle}">
                                         <span class="description"><?php echo esc_html__('Variables: {sku}, {angle}, {timestamp}', 'hp-abilities'); ?></span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row"><label for="hp_abilities_image_smoothing"><?php echo esc_html__('Edge Smoothing', 'hp-abilities'); ?></label></th>
+                                    <td>
+                                        <input name="hp_abilities_image_smoothing" type="range" id="hp_abilities_image_smoothing" value="<?php echo esc_attr($image_smoothing); ?>" min="0" max="20" style="width: 200px; vertical-align: middle;">
+                                        <span id="smoothing_value" style="display: inline-block; width: 35px; text-align: center; font-weight: bold;"><?php echo esc_html($image_smoothing); ?></span>
+                                        <span class="description"><?php echo esc_html__('0=off, higher=smoother bottle curves (fixes jagged edges)', 'hp-abilities'); ?></span>
+                                        <script>
+                                            document.getElementById('hp_abilities_image_smoothing').addEventListener('input', function(e) {
+                                                document.getElementById('smoothing_value').textContent = e.target.value;
+                                            });
+                                        </script>
                                     </td>
                                 </tr>
                             </table>
