@@ -1,0 +1,30 @@
+{
+  "name": "hp-abilities",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "bin": {
+    "hp-abilities": "bin/hp-mcp-bridge.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HolisticPeople/HP-Abilities.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/HolisticPeople/HP-Abilities/issues"
+  },
+  "homepage": "https://github.com/HolisticPeople/HP-Abilities#readme",
+  "dependencies": {
+    "@imgly/background-removal-node": "^1.4.5",
+    "axios": "^1.13.2",
+    "form-data": "^4.0.5",
+    "sharp": "^0.34.5"
+  }
+}

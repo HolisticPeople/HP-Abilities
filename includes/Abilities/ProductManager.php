@@ -690,4 +690,81 @@ class ProductManager
             ],
         ];
     }
+
+    /**
+     * Upload a file from base64 to the Media Library.
+     */
+    public static function uploadMedia(array $input): array
+    {
+        $file_content = $input['file_content'] ?? '';
+        $file_name = sanitize_file_name($input['file_name'] ?? 'upload.png');
+        $alt_text = sanitize_text_field($input['alt_text'] ?? '');
+        $product_id = isset($input['product_id']) ? (int) $input['product_id'] : 0;
+        $is_thumbnail = isset($input['is_thumbnail']) ? (bool) $input['is_thumbnail'] : false;
+
+        if (empty($file_content)) {
+            return ['success' => false, 'error' => __('File content is missing', 'hp-abilities')];
+        }
+
+        // Decode base64
+        $decoded_data = base64_decode($file_content);
+        if (!$decoded_data) {
+            return ['success' => false, 'error' => __('Invalid base64 content', 'hp-abilities')];
+        }
+
+        // Upload bits
+        $upload = wp_upload_bits($file_name, null, $decoded_data);
+        if ($upload['error']) {
+            return ['success' => false, 'error' => $upload['error']];
+        }
+
+        // Create attachment
+        $file_path = $upload['file'];
+        $file_url = $upload['url'];
+        $file_type = wp_check_filetype($file_path, null);
+
+        $attachment = [
+            'guid'           => $file_url,
+            'post_mime_type' => $file_type['type'],
+            'post_title'     => preg_replace('/\.[^.]+$/', '', $file_name),
+            'post_content'   => '',
+            'post_status'    => 'inherit'
+        ];
+
+        $attachment_id = wp_insert_attachment($attachment, $file_path, $product_id);
+
+        if (is_wp_error($attachment_id)) {
+            return ['success' => false, 'error' => $attachment_id->get_error_message()];
+        }
+
+        // Generate metadata
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+        $attachment_data = wp_generate_attachment_metadata($attachment_id, $file_path);
+        wp_update_attachment_metadata($attachment_id, $attachment_data);
+
+        // Set alt text
+        if ($alt_text) {
+            update_post_meta($attachment_id, '_wp_attachment_image_alt', $alt_text);
+        }
+
+        // Attach to product
+        if ($product_id > 0) {
+            if ($is_thumbnail) {
+                set_post_thumbnail($product_id, $attachment_id);
+            } else {
+                // Add to gallery
+                $gallery = get_post_meta($product_id, '_product_image_gallery', true);
+                $gallery_ids = $gallery ? explode(',', $gallery) : [];
+                $gallery_ids[] = $attachment_id;
+                update_post_meta($product_id, '_product_image_gallery', implode(',', array_filter($gallery_ids)));
+            }
+        }
+
+        return [
+            'success'       => true,
+            'attachment_id' => $attachment_id,
+            'url'           => $file_url,
+            'file_path'     => $file_path,
+        ];
+    }
 }

@@ -368,6 +368,7 @@ class Plugin
         self::load_classes();
         
         self::register_product_abilities();
+        self::register_media_abilities();
         self::register_order_abilities();
         self::register_funnel_abilities();
         self::register_economics_abilities();
@@ -684,6 +685,29 @@ class Plugin
             'input_schema'        => [
                 'type'       => 'object',
                 'properties' => (object)[],
+            ],
+            'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+    }
+
+    private static function register_media_abilities(): void
+    {
+        wp_register_ability('hp-abilities/media-upload', [
+            'label'               => 'Upload Media',
+            'description'         => 'Upload a file (base64) to the WordPress Media Library',
+            'category'            => 'hp-admin',
+            'execute_callback'    => [ProductManager::class, 'uploadMedia'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'input_schema'        => [
+                'type'       => 'object',
+                'properties' => [
+                    'file_content' => ['type' => 'string', 'description' => 'Base64 encoded file content'],
+                    'file_name'    => ['type' => 'string', 'description' => 'Name of the file (e.g. image.png)'],
+                    'alt_text'     => ['type' => 'string', 'description' => 'Alt text for the image'],
+                    'product_id'   => ['type' => 'integer', 'description' => 'Optional Product ID to attach this media to'],
+                    'is_thumbnail' => ['type' => 'boolean', 'description' => 'Whether to set as product thumbnail (requires product_id)', 'default' => false],
+                ],
+                'required'   => ['file_content', 'file_name'],
             ],
             'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
         ]);
@@ -1543,6 +1567,7 @@ This protocol ensures all AI agents maintain the HP Abilities ecosystem correctl
 | `products-gmc-audit` | GMC compliance audit |
 | `inventory-check` | Check stock levels |
 | `products-calculate-supply` | Calculate supply duration |
+| `media-upload` | Upload local file (base64) to Media Library |
 
 ### ACF-Powered Tools (ALL Fields via ACF Pro + Yoast)
 | Tool | Purpose |
@@ -1578,6 +1603,19 @@ When modifying HP Abilities tools, keep these files in sync:
 | Change behavior | Cursor rule `.mdc`, Settings page `get_protocol_rule_text()` |
 | Bridge changes | `bin/hp-mcp-bridge.js`, `C:\DEV\hp-mcp-bridge.js` |
 | Version bump | `hp-abilities.php` header + constant |
+
+## 7. Product Media Sourcing
+Agents must ensure professional product imagery:
+1. **Source multiple angles**: Look for Front/Primary, Side, Back, and Label images.
+2. **Automated Preparation**: ALWAYS run sourced image URLs through `bin/image-prep.js` locally.
+   - Command: `node bin/image-prep.js --url "SOURCE_URL" --sku "SKU" --angle "front|side|label"`
+3. **Upload Process**:
+   - The tool saves a prepared 1100x1100 transparent PNG locally.
+   - Use `media-upload` (base64) to push the prepared file to WordPress.
+4. **Naming Convention**: Prepared files should follow `[SKU]-[angle].png`.
+5. **Association**:
+   - `front` angle must be set as `is_thumbnail: true`.
+   - Other angles must be added to the product gallery (`is_thumbnail: false`).
 EOD;
     }
 }
