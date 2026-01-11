@@ -2,17 +2,20 @@
  * Image Preparation Tool for HP Abilities
  * 
  * Performs:
- * 1. AI-powered background removal (isnet model for accuracy)
- * 2. Gets raw alpha mask and applies our aggressiveness threshold
- * 3. Uses mask to cut original image (preserves edge pixels)
- * 4. Professional resizing and centering on transparent canvas
- * 5. Optional: Upload to WordPress and set as product image
+ * 1. AI-powered background removal
+ * 2. Alpha channel thresholding based on aggressiveness setting
+ * 3. Professional resizing and centering on transparent canvas
+ * 4. Optional: Upload to WordPress and set as product image
  * 
  * Usage:
- *   node bin/image-prep.js --url "http://..." --sku "DH515" --angle "front" [--sync] [--upload --product-id 123]
+ *   node bin/image-prep.js --file source.png --sku "DH515" --angle "front" [--sync] [--upload --product-id 123]
+ *   node bin/image-prep.js --file source.png --sku "DH515" --mask-only  (stops after creating mask)
+ *   node bin/image-prep.js --sku "DH515" --use-mask mask.png --upload --product-id 123  (uses pre-edited mask)
  * 
  * Flags:
  *   --sync       Fetch settings from WordPress before processing
+ *   --mask-only  Generate mask and stop (for agent inspection)
+ *   --use-mask   Use a pre-edited mask instead of generating new one
  *   --upload     Upload to WordPress after processing (requires --product-id)
  *   --thumbnail  Set as featured image (default: true for 'front' angle)
  */
@@ -41,179 +44,6 @@ const SSH_CONFIG = {
 };
 
 const TEMP_DIR = path.join(process.cwd(), 'temp');
-
-/**
- * Extract left and right edge coordinates from a binary mask.
- * For each row, finds the leftmost and rightmost opaque pixel.
- * 
- * @param {Buffer} alphaData - Raw alpha channel data (1 byte per pixel)
- * @param {number} width - Image width
- * @param {number} height - Image height
- * @returns {Object} - { leftEdge: number[], rightEdge: number[], topY: number, bottomY: number }
- */
-function extractEdges(alphaData, width, height) {
-    const leftEdge = new Array(height).fill(-1);
-    const rightEdge = new Array(height).fill(-1);
-    let topY = -1;
-    let bottomY = -1;
-    
-    for (let y = 0; y < height; y++) {
-        // Scan from left to find first opaque pixel
-        for (let x = 0; x < width; x++) {
-            if (alphaData[y * width + x] >= 128) {
-                leftEdge[y] = x;
-                break;
-            }
-        }
-        
-        // Scan from right to find last opaque pixel
-        for (let x = width - 1; x >= 0; x--) {
-            if (alphaData[y * width + x] >= 128) {
-                rightEdge[y] = x;
-                break;
-            }
-        }
-        
-        // Track first and last rows with content
-        if (leftEdge[y] >= 0) {
-            if (topY < 0) topY = y;
-            bottomY = y;
-        }
-    }
-    
-    return { leftEdge, rightEdge, topY, bottomY };
-}
-
-/**
- * Minimally correct bottle edges - only fix obvious inward dips.
- * Uses MEDIAN position (undershoot) to allow natural curves while
- * only fixing pixels that deviate significantly inward.
- * 
- * @param {Object} edges - { leftEdge, rightEdge, topY, bottomY }
- * @param {number} height - Image height
- * @returns {Object} - Corrected { leftEdge, rightEdge }
- */
-function correctBottleShape(edges, height) {
-    const { leftEdge, rightEdge, topY, bottomY } = edges;
-    
-    if (topY < 0 || bottomY < 0) {
-        return edges; // No content found
-    }
-    
-    const contentHeight = bottomY - topY;
-    
-    // Define body region (middle portion where sides should be straight)
-    const bodyStart = topY + Math.round(contentHeight * 0.25);  // Body starts at 25%
-    const bodyEnd = topY + Math.round(contentHeight * 0.85);    // Body ends at 85%
-    
-    // Collect edge positions in body region
-    const bodyLeftEdges = [];
-    const bodyRightEdges = [];
-    
-    for (let y = bodyStart; y <= bodyEnd; y++) {
-        if (leftEdge[y] >= 0) bodyLeftEdges.push(leftEdge[y]);
-        if (rightEdge[y] >= 0) bodyRightEdges.push(rightEdge[y]);
-    }
-    
-    if (bodyLeftEdges.length === 0 || bodyRightEdges.length === 0) {
-        return edges; // Not enough data
-    }
-    
-    // Use MEDIAN for expected position - this UNDERSHOOTS, allowing natural curves
-    // Only obvious inward dips (beyond the median) will be corrected
-    bodyLeftEdges.sort((a, b) => a - b);
-    bodyRightEdges.sort((a, b) => a - b);
-    
-    const medianLeft = bodyLeftEdges[Math.floor(bodyLeftEdges.length / 2)];
-    const medianRight = bodyRightEdges[Math.floor(bodyRightEdges.length / 2)];
-    
-    // Create corrected edges - only fix significant inward deviations
-    const correctedLeft = [...leftEdge];
-    const correctedRight = [...rightEdge];
-    
-    // Only correct pixels that are significantly INWARD from median
-    // (i.e., the AI incorrectly cut into the bottle)
-    for (let y = bodyStart; y <= bodyEnd; y++) {
-        // Left edge: if current is to the RIGHT of median, it's an inward dip - fix it
-        if (correctedLeft[y] >= 0 && correctedLeft[y] > medianLeft) {
-            correctedLeft[y] = medianLeft;
-        }
-        // Right edge: if current is to the LEFT of median, it's an inward dip - fix it
-        if (correctedRight[y] >= 0 && correctedRight[y] < medianRight) {
-            correctedRight[y] = medianRight;
-        }
-    }
-    
-    return { leftEdge: correctedLeft, rightEdge: correctedRight, topY, bottomY };
-}
-
-/**
- * Rebuild a mask from corrected edge coordinates.
- * For each row, fills pixels between left and right edge.
- * 
- * @param {Object} correctedEdges - { leftEdge, rightEdge }
- * @param {number} width - Image width
- * @param {number} height - Image height
- * @returns {Buffer} - New alpha mask
- */
-function rebuildMask(correctedEdges, width, height) {
-    const { leftEdge, rightEdge } = correctedEdges;
-    const newMask = Buffer.alloc(width * height, 0);
-    
-    for (let y = 0; y < height; y++) {
-        if (leftEdge[y] >= 0 && rightEdge[y] >= 0) {
-            for (let x = leftEdge[y]; x <= rightEdge[y]; x++) {
-                newMask[y * width + x] = 255;
-            }
-        }
-    }
-    
-    return newMask;
-}
-
-/**
- * Apply bottle shape correction to an image.
- * Extracts edges, corrects to expected bottle geometry, rebuilds mask.
- * 
- * @param {Buffer} imageBuffer - RGBA image buffer
- * @returns {Buffer} - Image with corrected bottle shape
- */
-async function correctBottleMask(imageBuffer) {
-    const { data, info } = await sharp(imageBuffer)
-        .ensureAlpha()
-        .raw()
-        .toBuffer({ resolveWithObject: true });
-    
-    const { width, height } = info;
-    
-    // Extract alpha channel
-    const alphaData = Buffer.alloc(width * height);
-    for (let i = 0; i < width * height; i++) {
-        alphaData[i] = data[i * 4 + 3];
-    }
-    
-    // Extract edges
-    const edges = extractEdges(alphaData, width, height);
-    
-    // Correct to bottle shape
-    const correctedEdges = correctBottleShape(edges, height);
-    
-    // Rebuild mask
-    const newMask = rebuildMask(correctedEdges, width, height);
-    
-    // Apply new mask to original RGB
-    const outputData = Buffer.alloc(width * height * 4);
-    for (let i = 0; i < width * height; i++) {
-        outputData[i * 4] = data[i * 4];         // R
-        outputData[i * 4 + 1] = data[i * 4 + 1]; // G
-        outputData[i * 4 + 2] = data[i * 4 + 2]; // B
-        outputData[i * 4 + 3] = newMask[i];      // Corrected alpha
-    }
-    
-    return sharp(outputData, { raw: { width, height, channels: 4 } })
-        .png()
-        .toBuffer();
-}
 
 /**
  * Fetch settings from WordPress via SSH (most reliable method)
@@ -250,63 +80,37 @@ function fetchSettingsFromWP() {
 }
 
 /**
- * Extract alpha channel from cutout and apply aggressiveness threshold.
- * Then apply the thresholded alpha to the original image.
+ * Apply aggressiveness threshold to alpha channel.
+ * Simple approach from v0.11.0 - threshold on cutout directly.
  * 
  * Aggressiveness controls the cutoff:
- * - 1 = keep pixels with >5% confidence (very permissive)
- * - 50 = keep pixels with >50% confidence (balanced)
- * - 100 = keep only pixels with >95% confidence (strict)
+ * - 1 = keep pixels with >5% opacity (very permissive)
+ * - 50 = keep pixels with >50% opacity (balanced)
+ * - 100 = keep only pixels with >95% opacity (strict)
  */
-async function applyThresholdedMaskToOriginal(originalBuffer, cutoutBuffer, aggressiveness) {
-    // Map aggressiveness 1-100 to threshold 5%-95%
+async function applyAggressiveness(imageBuffer, aggressiveness) {
     const threshold = (aggressiveness / 100) * 0.9 + 0.05;
     const thresholdValue = Math.round(threshold * 255);
     
-    console.error(`  Threshold: ${thresholdValue}/255 (keeping pixels with >${Math.round(threshold * 100)}% confidence)`);
+    console.error(`  Threshold: ${thresholdValue}/255 (keeping pixels with >${Math.round(threshold * 100)}% opacity)`);
 
-    // Get original image as RGBA
-    const { data: origData, info: origInfo } = await sharp(originalBuffer)
+    const { data, info } = await sharp(imageBuffer)
         .ensureAlpha()
         .raw()
         .toBuffer({ resolveWithObject: true });
-    
-    // Get cutout (which has the AI-generated alpha channel)
-    const { data: cutoutData, info: cutoutInfo } = await sharp(cutoutBuffer)
-        .ensureAlpha()
-        .raw()
-        .toBuffer({ resolveWithObject: true });
-    
-    // Ensure dimensions match
-    if (origInfo.width !== cutoutInfo.width || origInfo.height !== cutoutInfo.height) {
-        throw new Error('Original and cutout dimensions do not match');
-    }
-    
-    // Create output buffer
-    const outputData = Buffer.alloc(origInfo.width * origInfo.height * 4);
-    
-    // For each pixel: use original RGB, apply thresholded alpha from cutout
-    for (let i = 0; i < origInfo.width * origInfo.height; i++) {
-        const origAlpha = cutoutData[i * 4 + 3];  // Alpha from AI cutout
-        
-        // Apply threshold
-        let newAlpha;
-        if (origAlpha < thresholdValue) {
-            newAlpha = 0;  // Below threshold = fully transparent
-        } else {
-            newAlpha = 255;  // Above threshold = fully opaque (preserve original colors)
+
+    // Apply threshold to alpha channel (every 4th byte starting at index 3)
+    for (let i = 3; i < data.length; i += 4) {
+        if (data[i] < thresholdValue) {
+            data[i] = 0; // Fully transparent
         }
-        
-        outputData[i * 4] = origData[i * 4];       // R from original
-        outputData[i * 4 + 1] = origData[i * 4 + 1]; // G from original
-        outputData[i * 4 + 2] = origData[i * 4 + 2]; // B from original
-        outputData[i * 4 + 3] = newAlpha;            // Thresholded alpha
+        // Keep pixels above threshold as-is
     }
-    
-    return sharp(outputData, {
+
+    return sharp(data, {
         raw: {
-            width: origInfo.width,
-            height: origInfo.height,
+            width: info.width,
+            height: info.height,
             channels: 4
         }
     }).png().toBuffer();
@@ -429,9 +233,10 @@ async function prepareImage() {
         }
     }
 
-    const { url, file, sku, angle = 'front', sync, upload, product_id, thumbnail } = params;
+    const { url, file, sku, angle = 'front', sync, upload, product_id, thumbnail, mask_only, use_mask } = params;
 
-    if (!url && !file) {
+    // Validate inputs
+    if (!use_mask && !url && !file) {
         console.error(JSON.stringify({ success: false, error: 'Missing --url or --file parameter' }));
         process.exit(1);
     }
@@ -475,45 +280,63 @@ async function prepareImage() {
         if (params.aggressiveness) settings.aggressiveness = parseInt(params.aggressiveness, 10);
         if (params.naming) settings.naming = params.naming;
 
-        let inputSource;
-        let originalBuffer;
-        
-        if (url) {
-            console.error(`Processing URL: ${url}`);
-            inputSource = url;
-            originalBuffer = await downloadImage(url);
+        let cutoutBuffer;
+        const maskPath = path.join(TEMP_DIR, `${sku}-${angle}-mask.png`);
+
+        if (use_mask) {
+            // Use pre-edited mask provided by agent
+            console.error(`Using pre-edited mask: ${use_mask}`);
+            cutoutBuffer = fs.readFileSync(use_mask);
         } else {
-            console.error(`Processing File: ${file}`);
-            inputSource = path.resolve(file);
-            originalBuffer = fs.readFileSync(inputSource);
+            // Generate mask from source
+            let inputSource;
+            
+            if (url) {
+                console.error(`Processing URL: ${url}`);
+                inputSource = url;
+            } else {
+                console.error(`Processing File: ${file}`);
+                inputSource = path.resolve(file);
+            }
+
+            // 1. Get cutout from AI
+            console.error('Getting cutout from AI...');
+            const cutoutPath = path.join(TEMP_DIR, `${sku}-${angle}-cutout.png`);
+            
+            try {
+                execSync(`node "${path.join(__dirname, 'bg-remove-helper.js')}" "${inputSource}" "${cutoutPath}"`, { stdio: 'inherit' });
+            } catch (e) {
+                throw new Error('Background removal failed');
+            }
+
+            const cutoutFromAI = fs.readFileSync(cutoutPath);
+
+            // 2. Apply aggressiveness threshold
+            console.error(`Applying aggressiveness threshold: ${settings.aggressiveness}/100`);
+            cutoutBuffer = await applyAggressiveness(cutoutFromAI, settings.aggressiveness);
+
+            // Save mask for agent inspection
+            fs.writeFileSync(maskPath, cutoutBuffer);
+            console.error(`Mask saved to: ${maskPath}`);
+
+            // Clean up temp cutout
+            try { fs.unlinkSync(cutoutPath); } catch (e) { /* ignore */ }
+
+            // If --mask-only, stop here
+            if (mask_only) {
+                console.log(JSON.stringify({
+                    success: true,
+                    mode: 'mask-only',
+                    sku,
+                    angle,
+                    mask: maskPath,
+                    message: 'Mask generated. Agent should inspect and edit if needed, then run with --use-mask'
+                }));
+                return;
+            }
         }
-        
-        // Save original for later use (we'll apply the mask to it)
-        const originalPath = path.join(TEMP_DIR, `${sku}-${angle}-original.png`);
-        fs.writeFileSync(originalPath, originalBuffer);
 
-        // 1. Get cutout from AI (preserves raw alpha probabilities)
-        console.error('Getting cutout from AI...');
-        const cutoutPath = path.join(TEMP_DIR, `${sku}-${angle}-cutout.png`);
-        
-        try {
-            execSync(`node "${path.join(__dirname, 'bg-remove-helper.js')}" "${inputSource}" "${cutoutPath}"`, { stdio: 'inherit' });
-        } catch (e) {
-            throw new Error('Background removal failed');
-        }
-
-        const cutoutFromAI = fs.readFileSync(cutoutPath);
-
-        // 2. Apply our aggressiveness threshold to the alpha channel
-        // and use original image colors (not cutout colors which may be degraded)
-        console.error(`Applying aggressiveness threshold: ${settings.aggressiveness}/100`);
-        let cutoutBuffer = await applyThresholdedMaskToOriginal(originalBuffer, cutoutFromAI, settings.aggressiveness);
-
-        // 3. Apply bottle shape correction (straight sides, smooth curves)
-        console.error('Applying bottle shape correction...');
-        cutoutBuffer = await correctBottleMask(cutoutBuffer);
-
-        // 4. Trim and resize
+        // 3. Trim and resize
         console.error('Trimming and resizing...');
         const trimmed = await sharp(cutoutBuffer).trim().toBuffer({ resolveWithObject: true });
         const { width, height } = trimmed.info;
@@ -528,7 +351,7 @@ async function prepareImage() {
             .resize(newWidth, newHeight)
             .toBuffer();
 
-        // 5. Composite on canvas
+        // 4. Composite on canvas
         const outputFilename = generateFilename(settings.naming, sku, angle);
         const outputPath = path.join(TEMP_DIR, outputFilename);
         
@@ -544,15 +367,10 @@ async function prepareImage() {
         .png()
         .toFile(outputPath);
 
-        // Clean up temp files
-        try { fs.unlinkSync(cutoutPath); } catch (e) { /* ignore */ }
-        try { fs.unlinkSync(originalPath); } catch (e) { /* ignore */ }
-
         const result = {
             success: true,
             sku,
             angle,
-            original: url || file,
             output: outputPath,
             width: settings.target_size,
             height: settings.target_size,
@@ -565,7 +383,7 @@ async function prepareImage() {
             }
         };
 
-        // 6. Upload to WordPress if --upload flag is set
+        // 5. Upload to WordPress if --upload flag is set
         if (upload) {
             const isThumbnail = thumbnail !== 'false' && (thumbnail === true || thumbnail === 'true' || angle === 'front');
             const uploadResult = await uploadToWordPress(outputPath, parseInt(product_id, 10), isThumbnail, sku, angle);
