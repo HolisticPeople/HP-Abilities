@@ -85,9 +85,9 @@ function extractEdges(alphaData, width, height) {
 }
 
 /**
- * Minimally correct bottle edges - only fix obvious deviations.
- * Finds the expected straight line for the body and only adjusts
- * pixels that deviate significantly (inward dips).
+ * Minimally correct bottle edges - only fix obvious inward dips.
+ * Uses MEDIAN position (undershoot) to allow natural curves while
+ * only fixing pixels that deviate significantly inward.
  * 
  * @param {Object} edges - { leftEdge, rightEdge, topY, bottomY }
  * @param {number} height - Image height
@@ -106,40 +106,41 @@ function correctBottleShape(edges, height) {
     const bodyStart = topY + Math.round(contentHeight * 0.25);  // Body starts at 25%
     const bodyEnd = topY + Math.round(contentHeight * 0.85);    // Body ends at 85%
     
-    // Calculate the expected edge position (use rightmost for left, leftmost for right)
-    // This finds where the edge SHOULD be if it were straight
-    let expectedLeft = -1;
-    let expectedRight = -1;
+    // Collect edge positions in body region
+    const bodyLeftEdges = [];
+    const bodyRightEdges = [];
     
     for (let y = bodyStart; y <= bodyEnd; y++) {
-        if (leftEdge[y] >= 0) {
-            // Left edge: the correct position is the LEFTMOST (smallest x)
-            if (expectedLeft < 0 || leftEdge[y] < expectedLeft) {
-                expectedLeft = leftEdge[y];
-            }
-        }
-        if (rightEdge[y] >= 0) {
-            // Right edge: the correct position is the RIGHTMOST (largest x)
-            if (expectedRight < 0 || rightEdge[y] > expectedRight) {
-                expectedRight = rightEdge[y];
-            }
-        }
+        if (leftEdge[y] >= 0) bodyLeftEdges.push(leftEdge[y]);
+        if (rightEdge[y] >= 0) bodyRightEdges.push(rightEdge[y]);
     }
     
-    // Create corrected edges - only fix inward deviations in body region
+    if (bodyLeftEdges.length === 0 || bodyRightEdges.length === 0) {
+        return edges; // Not enough data
+    }
+    
+    // Use MEDIAN for expected position - this UNDERSHOOTS, allowing natural curves
+    // Only obvious inward dips (beyond the median) will be corrected
+    bodyLeftEdges.sort((a, b) => a - b);
+    bodyRightEdges.sort((a, b) => a - b);
+    
+    const medianLeft = bodyLeftEdges[Math.floor(bodyLeftEdges.length / 2)];
+    const medianRight = bodyRightEdges[Math.floor(bodyRightEdges.length / 2)];
+    
+    // Create corrected edges - only fix significant inward deviations
     const correctedLeft = [...leftEdge];
     const correctedRight = [...rightEdge];
     
-    // Only correct pixels that are INWARD from where they should be
+    // Only correct pixels that are significantly INWARD from median
     // (i.e., the AI incorrectly cut into the bottle)
     for (let y = bodyStart; y <= bodyEnd; y++) {
-        // Left edge: if current position is to the RIGHT of expected, it's an inward dip - fix it
-        if (correctedLeft[y] >= 0 && expectedLeft >= 0 && correctedLeft[y] > expectedLeft) {
-            correctedLeft[y] = expectedLeft;
+        // Left edge: if current is to the RIGHT of median, it's an inward dip - fix it
+        if (correctedLeft[y] >= 0 && correctedLeft[y] > medianLeft) {
+            correctedLeft[y] = medianLeft;
         }
-        // Right edge: if current position is to the LEFT of expected, it's an inward dip - fix it
-        if (correctedRight[y] >= 0 && expectedRight >= 0 && correctedRight[y] < expectedRight) {
-            correctedRight[y] = expectedRight;
+        // Right edge: if current is to the LEFT of median, it's an inward dip - fix it
+        if (correctedRight[y] >= 0 && correctedRight[y] < medianRight) {
+            correctedRight[y] = medianRight;
         }
     }
     
