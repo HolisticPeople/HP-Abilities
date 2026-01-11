@@ -113,17 +113,26 @@ async function smoothMask(imageBuffer, smoothingRadius) {
         alphaMask[i] = data[i * 4 + 3];
     }
     
-    // Morphological dilation: expand opaque pixels into neighbors
-    // This fills gaps where the AI incorrectly marked edge pixels as transparent
+    // Morphological dilation with majority voting: expand into pixels where
+    // more than 50% of neighbors are opaque. This prevents over-expansion
+    // into the background while still filling gaps in the product mask.
     const dilatedMask = Buffer.alloc(width * height);
     const radius = smoothingRadius;
     
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             const idx = y * width + x;
-            let maxVal = alphaMask[idx];
             
-            // Check circular neighborhood for any opaque pixel
+            // If already opaque, keep it
+            if (alphaMask[idx] >= 128) {
+                dilatedMask[idx] = 255;
+                continue;
+            }
+            
+            // Count opaque vs total neighbors in circular neighborhood
+            let opaqueCount = 0;
+            let totalCount = 0;
+            
             for (let dy = -radius; dy <= radius; dy++) {
                 for (let dx = -radius; dx <= radius; dx++) {
                     const nx = x + dx;
@@ -131,15 +140,18 @@ async function smoothMask(imageBuffer, smoothingRadius) {
                     if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
                         const dist = Math.sqrt(dx * dx + dy * dy);
                         if (dist <= radius) {
+                            totalCount++;
                             const nIdx = ny * width + nx;
-                            if (alphaMask[nIdx] > maxVal) {
-                                maxVal = alphaMask[nIdx];
+                            if (alphaMask[nIdx] >= 128) {
+                                opaqueCount++;
                             }
                         }
                     }
                 }
             }
-            dilatedMask[idx] = maxVal;
+            
+            // Make opaque if more than 50% of neighbors are opaque
+            dilatedMask[idx] = (opaqueCount > totalCount * 0.5) ? 255 : 0;
         }
     }
     
