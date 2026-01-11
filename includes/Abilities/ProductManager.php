@@ -303,10 +303,45 @@ class ProductManager
                 }
             }
 
-            // ACF fields
-            if (!empty($input['acf']) && is_array($input['acf']) && function_exists('update_field')) {
-                foreach ($input['acf'] as $field_key => $field_value) {
-                    update_field($field_key, $field_value, $product_id);
+            // Supplement ACF fields (common HP product fields)
+            if (function_exists('update_field')) {
+                // Serving info
+                if (isset($input['serving_size'])) {
+                    update_field('serving_size', (int) $input['serving_size'], $product_id);
+                }
+                if (isset($input['servings_per_container'])) {
+                    update_field('servings_per_container', (int) $input['servings_per_container'], $product_id);
+                }
+                if (!empty($input['serving_form_unit'])) {
+                    update_field('serving_form_unit', sanitize_text_field($input['serving_form_unit']), $product_id);
+                }
+                // Ingredients
+                if (!empty($input['ingredients'])) {
+                    update_field('ingredients', sanitize_textarea_field($input['ingredients']), $product_id);
+                }
+                if (!empty($input['ingredients_other'])) {
+                    update_field('ingredients_other', sanitize_text_field($input['ingredients_other']), $product_id);
+                }
+                // Potency
+                if (!empty($input['potency'])) {
+                    update_field('potency', sanitize_text_field($input['potency']), $product_id);
+                }
+                if (!empty($input['potency_units'])) {
+                    update_field('potency_units', sanitize_text_field($input['potency_units']), $product_id);
+                }
+                // Manufacturer
+                if (!empty($input['manufacturer_acf'])) {
+                    update_field('manufacturer_acf', sanitize_text_field($input['manufacturer_acf']), $product_id);
+                }
+                if (!empty($input['country_of_manufacturer'])) {
+                    update_field('country_of_manufacturer', sanitize_text_field($input['country_of_manufacturer']), $product_id);
+                }
+                
+                // Additional ACF fields (generic)
+                if (!empty($input['acf']) && is_array($input['acf'])) {
+                    foreach ($input['acf'] as $field_key => $field_value) {
+                        update_field($field_key, $field_value, $product_id);
+                    }
                 }
             }
 
@@ -318,6 +353,9 @@ class ProductManager
                 }
                 if (!empty($seo['description'])) {
                     update_post_meta($product_id, '_yoast_wpseo_metadesc', sanitize_text_field($seo['description']));
+                }
+                if (!empty($seo['focus_keyword'])) {
+                    update_post_meta($product_id, '_yoast_wpseo_focuskw', sanitize_text_field($seo['focus_keyword']));
                 }
             }
 
@@ -341,5 +379,124 @@ class ProductManager
                 'error' => $e->getMessage()
             ];
         }
+    }
+
+    /**
+     * Retire a product and create a redirect to the replacement.
+     * Uses Yoast Premium's redirect manager.
+     */
+    public static function retireWithRedirect(array $input): array
+    {
+        $old_sku = isset($input['old_sku']) ? sanitize_text_field($input['old_sku']) : '';
+        $new_sku = isset($input['new_sku']) ? sanitize_text_field($input['new_sku']) : '';
+        $redirect_type = isset($input['redirect_type']) ? (int) $input['redirect_type'] : 301;
+        $set_private = isset($input['set_private']) ? (bool) $input['set_private'] : true;
+
+        if (empty($old_sku) || empty($new_sku)) {
+            return [
+                'success' => false,
+                'error' => __('Both old_sku and new_sku are required', 'hp-abilities')
+            ];
+        }
+
+        // Get old product
+        $old_product_id = wc_get_product_id_by_sku($old_sku);
+        if (!$old_product_id) {
+            return [
+                'success' => false,
+                'error' => sprintf(__('Old product with SKU "%s" not found', 'hp-abilities'), $old_sku)
+            ];
+        }
+
+        // Get new product
+        $new_product_id = wc_get_product_id_by_sku($new_sku);
+        if (!$new_product_id) {
+            return [
+                'success' => false,
+                'error' => sprintf(__('New product with SKU "%s" not found', 'hp-abilities'), $new_sku)
+            ];
+        }
+
+        $old_product = wc_get_product($old_product_id);
+        $new_product = wc_get_product($new_product_id);
+
+        // Get permalinks (relative paths for Yoast)
+        $old_url = wp_make_link_relative(get_permalink($old_product_id));
+        $new_url = wp_make_link_relative(get_permalink($new_product_id));
+
+        // Validate redirect type
+        $valid_types = [301, 302, 307, 410];
+        if (!in_array($redirect_type, $valid_types)) {
+            $redirect_type = 301;
+        }
+
+        // Check if Yoast Premium redirect manager is available
+        $yoast_available = class_exists('WPSEO_Redirect_Manager') || function_exists('wpseo_premium_get_redirects');
+        
+        $redirect_created = false;
+        $redirect_method = 'none';
+
+        if ($yoast_available || true) { // Always try option-based approach
+            // Yoast Premium stores redirects in options table
+            $redirects = get_option('wpseo-premium-redirects-base', []);
+            
+            // Check if redirect already exists
+            if (isset($redirects[$old_url])) {
+                return [
+                    'success' => false,
+                    'error' => sprintf(__('Redirect already exists for "%s"', 'hp-abilities'), $old_url),
+                    'existing_redirect' => $redirects[$old_url]
+                ];
+            }
+
+            // Add the redirect
+            $redirects[$old_url] = [
+                'url'    => $new_url,
+                'type'   => $redirect_type,
+                'format' => 'plain', // plain URL redirect
+            ];
+
+            $updated = update_option('wpseo-premium-redirects-base', $redirects);
+            
+            if ($updated) {
+                $redirect_created = true;
+                $redirect_method = 'yoast_premium';
+            }
+        }
+
+        // Optionally set old product to private
+        $old_status_changed = false;
+        if ($set_private && $old_product) {
+            $old_product->set_status('private');
+            $old_product->set_stock_status('outofstock');
+            $old_product->save();
+            $old_status_changed = true;
+        }
+
+        return [
+            'success' => true,
+            'data' => [
+                'old_product' => [
+                    'id'        => $old_product_id,
+                    'sku'       => $old_sku,
+                    'name'      => $old_product->get_name(),
+                    'old_url'   => $old_url,
+                    'new_status'=> $old_status_changed ? 'private' : $old_product->get_status(),
+                ],
+                'new_product' => [
+                    'id'        => $new_product_id,
+                    'sku'       => $new_sku,
+                    'name'      => $new_product->get_name(),
+                    'new_url'   => $new_url,
+                ],
+                'redirect' => [
+                    'created'       => $redirect_created,
+                    'method'        => $redirect_method,
+                    'type'          => $redirect_type,
+                    'from'          => $old_url,
+                    'to'            => $new_url,
+                ],
+            ],
+        ];
     }
 }

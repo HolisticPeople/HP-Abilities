@@ -544,8 +544,19 @@ class Plugin
                     'weight'            => ['type' => 'string', 'description' => 'Weight (kg)'],
                     'dimensions'        => ['type' => 'object', 'description' => '{length, width, height}'],
                     'images'            => ['type' => 'array', 'description' => 'Image URLs to sideload'],
-                    'acf'               => ['type' => 'object', 'description' => 'ACF field key-value pairs'],
-                    'seo'               => ['type' => 'object', 'description' => '{title, description} for Yoast'],
+                    // Supplement ACF fields (common HP product fields)
+                    'serving_size'           => ['type' => 'integer', 'description' => 'Units per serving (e.g., 2 capsules)'],
+                    'servings_per_container' => ['type' => 'integer', 'description' => 'Total servings in container'],
+                    'serving_form_unit'      => ['type' => 'string', 'description' => 'Form unit: Capsule, Dropper, Soft Gel, Tablet(s), etc.'],
+                    'ingredients'            => ['type' => 'string', 'description' => 'Primary ingredients list'],
+                    'ingredients_other'      => ['type' => 'string', 'description' => 'Other ingredients'],
+                    'potency'                => ['type' => 'string', 'description' => 'Potency concentration value'],
+                    'potency_units'          => ['type' => 'string', 'description' => 'Potency units: IU, mcg, mg, PPM'],
+                    'manufacturer_acf'       => ['type' => 'string', 'description' => 'Manufacturer name (e.g., Dragon Herbs Ron Teeguarden)'],
+                    'country_of_manufacturer'=> ['type' => 'string', 'description' => 'Country: United States, Taiwan'],
+                    // Generic ACF and SEO
+                    'acf'               => ['type' => 'object', 'description' => 'Additional ACF fields by field name'],
+                    'seo'               => ['type' => 'object', 'description' => '{title, description, focus_keyword} for Yoast'],
                 ],
                 'required'   => ['name', 'sku', 'price'],
             ],
@@ -566,6 +577,25 @@ class Plugin
                     'servings_per_day' => ['type' => 'integer', 'description' => 'Number of servings per day', 'default' => 1],
                 ],
                 'required'   => ['sku'],
+            ],
+            'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+
+        wp_register_ability('hp-abilities/products-retire-redirect', [
+            'label'               => 'Retire Product with Redirect',
+            'description'         => 'Retire a product and create 301 redirect to replacement using Yoast Premium',
+            'category'            => 'hp-admin',
+            'execute_callback'    => [ProductManager::class, 'retireWithRedirect'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'input_schema'        => [
+                'type'       => 'object',
+                'properties' => [
+                    'old_sku'       => ['type' => 'string', 'description' => 'SKU of the product being retired'],
+                    'new_sku'       => ['type' => 'string', 'description' => 'SKU of the replacement product'],
+                    'redirect_type' => ['type' => 'integer', 'description' => 'Redirect type: 301 (default), 302, 307, or 410', 'default' => 301],
+                    'set_private'   => ['type' => 'boolean', 'description' => 'Set old product to private status', 'default' => true],
+                ],
+                'required'   => ['old_sku', 'new_sku'],
             ],
             'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
         ]);
@@ -669,7 +699,7 @@ class Plugin
                 'properties' => [
                     'title'  => ['type' => 'string', 'description' => 'Funnel title'],
                     'slug'   => ['type' => 'string', 'description' => 'Funnel slug'],
-                    'config' => ['type' => 'object', 'description' => 'Full funnel configuration object', 'properties' => (object)[]],
+                    'config' => ['type' => 'object', 'description' => 'Full funnel configuration object', 'additionalProperties' => true],
                 ],
                 'required'   => ['title', 'config'],
             ],
@@ -686,7 +716,7 @@ class Plugin
                 'type'       => 'object',
                 'properties' => [
                     'funnel_slug' => ['type' => 'string', 'description' => 'Slug of the funnel to update'],
-                    'config'      => ['type' => 'object', 'description' => 'Updated funnel configuration object', 'properties' => (object)[]],
+                    'config'      => ['type' => 'object', 'description' => 'Updated funnel configuration object', 'additionalProperties' => true],
                 ],
                 'required'   => ['funnel_slug', 'config'],
             ],
@@ -703,7 +733,7 @@ class Plugin
                 'type'       => 'object',
                 'properties' => [
                     'slug'     => ['type' => 'string', 'description' => 'Slug of the funnel'],
-                    'sections' => ['type' => 'object', 'description' => 'Map of section names to new configurations', 'properties' => (object)[]],
+                    'sections' => ['type' => 'object', 'description' => 'Map of section names to new configurations', 'additionalProperties' => true],
                 ],
                 'required'   => ['slug', 'sections'],
             ],
@@ -719,7 +749,7 @@ class Plugin
             'input_schema'        => [
                 'type'       => 'object',
                 'properties' => [
-                    'config' => ['type' => 'object', 'description' => 'Funnel configuration object to validate', 'properties' => (object)[]],
+                    'config' => ['type' => 'object', 'description' => 'Funnel configuration object to validate', 'additionalProperties' => true],
                 ],
                 'required'   => ['config'],
             ],
@@ -1417,8 +1447,9 @@ This protocol ensures all AI agents maintain the HP Abilities ecosystem correctl
 |------|---------|
 | `products-search` | Search products by term |
 | `products-get` | Get product details by SKU |
-| `products-create` | Create new simple product with full fields |
+| `products-create` | Create new simple product with full fields + ACF |
 | `products-update-comprehensive` | Update product (core, ACF, SEO) |
+| `products-retire-redirect` | Retire product with 301 redirect to replacement |
 | `products-seo-audit` | SEO audit |
 | `products-gmc-audit` | GMC compliance audit |
 | `inventory-check` | Check stock levels |
@@ -1426,8 +1457,13 @@ This protocol ensures all AI agents maintain the HP Abilities ecosystem correctl
 
 ## 4. Implementation Standards
 - **Callbacks**: Use static methods in Ability classes (e.g., `ProductManager::createProduct`).
-- **Input Validation**: Use standard JSON schema for `input_schema`. Ensure empty parameters are `(object)[]`.
+- **Input Validation**: Use standard JSON schema for `input_schema`.
 - **Dependencies**: Check if `HP_RW` service classes exist before execution.
+
+## 4a. Schema Lessons Learned
+- **Avoid `(object)[]` for nested objects**: When `additionalProperties:false` is set by JSON serialization, Cursor hides tools with empty property definitions.
+- **Fix**: Use `'additionalProperties' => true` for flexible object types instead of `'properties' => (object)[]`.
+- **Explicit properties**: Define at least primary properties for tools where the agent needs clear guidance.
 
 ## 5. Deployment & Verification
 - **Auto-Discovery**: Tools are discovered dynamically on the Settings page.
