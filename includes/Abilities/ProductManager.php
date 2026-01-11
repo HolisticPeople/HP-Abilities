@@ -420,9 +420,13 @@ class ProductManager
         $old_product = wc_get_product($old_product_id);
         $new_product = wc_get_product($new_product_id);
 
-        // Get permalinks (relative paths for Yoast)
-        $old_url = wp_make_link_relative(get_permalink($old_product_id));
-        $new_url = wp_make_link_relative(get_permalink($new_product_id));
+        // Get permalinks (relative paths for Yoast - without leading slashes)
+        $old_url = ltrim(wp_make_link_relative(get_permalink($old_product_id)), '/');
+        $new_url = ltrim(wp_make_link_relative(get_permalink($new_product_id)), '/');
+        
+        // Remove trailing slashes for consistency
+        $old_url = rtrim($old_url, '/');
+        $new_url = rtrim($new_url, '/');
 
         // Validate redirect type
         $valid_types = [301, 302, 307, 410];
@@ -430,38 +434,32 @@ class ProductManager
             $redirect_type = 301;
         }
 
-        // Check if Yoast Premium redirect manager is available
-        $yoast_available = class_exists('WPSEO_Redirect_Manager') || function_exists('wpseo_premium_get_redirects');
-        
         $redirect_created = false;
         $redirect_method = 'none';
 
-        if ($yoast_available || true) { // Always try option-based approach
-            // Yoast Premium stores redirects in options table
-            $redirects = get_option('wpseo-premium-redirects-base', []);
-            
-            // Check if redirect already exists
-            if (isset($redirects[$old_url])) {
-                return [
-                    'success' => false,
-                    'error' => sprintf(__('Redirect already exists for "%s"', 'hp-abilities'), $old_url),
-                    'existing_redirect' => $redirects[$old_url]
-                ];
-            }
-
-            // Add the redirect
-            $redirects[$old_url] = [
-                'url'    => $new_url,
-                'type'   => $redirect_type,
-                'format' => 'plain', // plain URL redirect
+        // Yoast Premium stores plain redirects in wpseo-premium-redirects-export-plain
+        $redirects = get_option('wpseo-premium-redirects-export-plain', []);
+        
+        // Check if redirect already exists
+        if (isset($redirects[$old_url])) {
+            return [
+                'success' => false,
+                'error' => sprintf(__('Redirect already exists for "%s"', 'hp-abilities'), $old_url),
+                'existing_redirect' => $redirects[$old_url]
             ];
+        }
 
-            $updated = update_option('wpseo-premium-redirects-base', $redirects);
-            
-            if ($updated) {
-                $redirect_created = true;
-                $redirect_method = 'yoast_premium';
-            }
+        // Add the redirect (Yoast format: just url and type)
+        $redirects[$old_url] = [
+            'url'  => $new_url,
+            'type' => $redirect_type,
+        ];
+
+        $updated = update_option('wpseo-premium-redirects-export-plain', $redirects);
+        
+        if ($updated) {
+            $redirect_created = true;
+            $redirect_method = 'yoast_premium';
         }
 
         // Optionally set old product to private
