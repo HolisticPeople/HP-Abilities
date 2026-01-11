@@ -497,4 +497,197 @@ class ProductManager
             ],
         ];
     }
+
+    // =========================================================================
+    // WPSE-POWERED METHODS (WP Sheet Editor Integration)
+    // =========================================================================
+
+    /**
+     * Get ALL product fields via WP Sheet Editor.
+     */
+    public static function getFullProduct(array $input): array
+    {
+        $sku = isset($input['sku']) ? sanitize_text_field($input['sku']) : '';
+        
+        if (empty($sku)) {
+            return ['success' => false, 'error' => __('SKU is required', 'hp-abilities')];
+        }
+
+        $product_id = wc_get_product_id_by_sku($sku);
+        if (!$product_id) {
+            return ['success' => false, 'error' => sprintf(__('Product with SKU "%s" not found', 'hp-abilities'), $sku)];
+        }
+
+        if (!\HP_Abilities\Adapters\WPSEAdapter::isAvailable()) {
+            return ['success' => false, 'error' => __('WP Sheet Editor Pro is required for this operation', 'hp-abilities')];
+        }
+
+        $fields = \HP_Abilities\Adapters\WPSEAdapter::getProductFields($product_id);
+        
+        if (isset($fields['error'])) {
+            return ['success' => false, 'error' => $fields['error']];
+        }
+
+        $product = wc_get_product($product_id);
+        
+        return [
+            'success' => true,
+            'data' => [
+                'id' => $product_id,
+                'sku' => $sku,
+                'name' => $product->get_name(),
+                'permalink' => $product->get_permalink(),
+                'fields' => $fields,
+            ],
+        ];
+    }
+
+    /**
+     * Compare two products field-by-field via WPSE.
+     */
+    public static function compareProducts(array $input): array
+    {
+        $source_sku = isset($input['source_sku']) ? sanitize_text_field($input['source_sku']) : '';
+        $target_sku = isset($input['target_sku']) ? sanitize_text_field($input['target_sku']) : '';
+        
+        if (empty($source_sku) || empty($target_sku)) {
+            return ['success' => false, 'error' => __('Both source_sku and target_sku are required', 'hp-abilities')];
+        }
+
+        $source_id = wc_get_product_id_by_sku($source_sku);
+        $target_id = wc_get_product_id_by_sku($target_sku);
+        
+        if (!$source_id) {
+            return ['success' => false, 'error' => sprintf(__('Source product with SKU "%s" not found', 'hp-abilities'), $source_sku)];
+        }
+        if (!$target_id) {
+            return ['success' => false, 'error' => sprintf(__('Target product with SKU "%s" not found', 'hp-abilities'), $target_sku)];
+        }
+
+        if (!\HP_Abilities\Adapters\WPSEAdapter::isAvailable()) {
+            return ['success' => false, 'error' => __('WP Sheet Editor Pro is required for this operation', 'hp-abilities')];
+        }
+
+        $result = \HP_Abilities\Adapters\WPSEAdapter::compareProducts($source_id, $target_id);
+        
+        if (!$result['success']) {
+            return $result;
+        }
+
+        // Add SKU info to the result
+        $result['source_sku'] = $source_sku;
+        $result['target_sku'] = $target_sku;
+        
+        return $result;
+    }
+
+    /**
+     * Clone product fields from source to target via WPSE.
+     */
+    public static function cloneProduct(array $input): array
+    {
+        $source_sku = isset($input['source_sku']) ? sanitize_text_field($input['source_sku']) : '';
+        $target_sku = isset($input['target_sku']) ? sanitize_text_field($input['target_sku']) : '';
+        $overrides = isset($input['overrides']) && is_array($input['overrides']) ? $input['overrides'] : [];
+        $exclude = isset($input['exclude']) && is_array($input['exclude']) ? $input['exclude'] : [];
+        
+        if (empty($source_sku) || empty($target_sku)) {
+            return ['success' => false, 'error' => __('Both source_sku and target_sku are required', 'hp-abilities')];
+        }
+
+        $source_id = wc_get_product_id_by_sku($source_sku);
+        $target_id = wc_get_product_id_by_sku($target_sku);
+        
+        if (!$source_id) {
+            return ['success' => false, 'error' => sprintf(__('Source product with SKU "%s" not found', 'hp-abilities'), $source_sku)];
+        }
+        if (!$target_id) {
+            return ['success' => false, 'error' => sprintf(__('Target product with SKU "%s" not found', 'hp-abilities'), $target_sku)];
+        }
+
+        if (!\HP_Abilities\Adapters\WPSEAdapter::isAvailable()) {
+            return ['success' => false, 'error' => __('WP Sheet Editor Pro is required for this operation', 'hp-abilities')];
+        }
+
+        $result = \HP_Abilities\Adapters\WPSEAdapter::cloneProductFields($source_id, $target_id, $overrides, $exclude);
+        
+        // Add SKU info to the result
+        $result['source_sku'] = $source_sku;
+        $result['target_sku'] = $target_sku;
+        
+        return $result;
+    }
+
+    /**
+     * Update product fields by human-readable name via WPSE.
+     */
+    public static function updateFields(array $input): array
+    {
+        $sku = isset($input['sku']) ? sanitize_text_field($input['sku']) : '';
+        $fields = isset($input['fields']) && is_array($input['fields']) ? $input['fields'] : [];
+        
+        if (empty($sku)) {
+            return ['success' => false, 'error' => __('SKU is required', 'hp-abilities')];
+        }
+        if (empty($fields)) {
+            return ['success' => false, 'error' => __('Fields object is required', 'hp-abilities')];
+        }
+
+        $product_id = wc_get_product_id_by_sku($sku);
+        if (!$product_id) {
+            return ['success' => false, 'error' => sprintf(__('Product with SKU "%s" not found', 'hp-abilities'), $sku)];
+        }
+
+        if (!\HP_Abilities\Adapters\WPSEAdapter::isAvailable()) {
+            return ['success' => false, 'error' => __('WP Sheet Editor Pro is required for this operation', 'hp-abilities')];
+        }
+
+        $result = \HP_Abilities\Adapters\WPSEAdapter::setProductFields($product_id, $fields);
+        
+        // Add context to the result
+        $result['sku'] = $sku;
+        $result['product_id'] = $product_id;
+        
+        return $result;
+    }
+
+    /**
+     * Get list of available product fields from WPSE registry.
+     */
+    public static function getAvailableFields(array $input): array
+    {
+        if (!\HP_Abilities\Adapters\WPSEAdapter::isAvailable()) {
+            return ['success' => false, 'error' => __('WP Sheet Editor Pro is required for this operation', 'hp-abilities')];
+        }
+
+        $fields = \HP_Abilities\Adapters\WPSEAdapter::getAvailableFields('product');
+        
+        // Group fields by type
+        $grouped = [
+            'core' => [],
+            'acf' => [],
+            'other' => [],
+        ];
+        
+        foreach ($fields as $key => $info) {
+            if ($info['is_acf']) {
+                $grouped['acf'][$key] = $info;
+            } elseif (in_array($key, ['ID', 'post_title', 'post_content', 'post_excerpt', 'post_status', 'post_date', 'post_author', 'post_parent'])) {
+                $grouped['core'][$key] = $info;
+            } else {
+                $grouped['other'][$key] = $info;
+            }
+        }
+        
+        return [
+            'success' => true,
+            'data' => [
+                'total_fields' => count($fields),
+                'core_count' => count($grouped['core']),
+                'acf_count' => count($grouped['acf']),
+                'other_count' => count($grouped['other']),
+                'fields' => $grouped,
+            ],
+        ];
+    }
 }

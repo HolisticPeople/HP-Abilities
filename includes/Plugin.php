@@ -8,6 +8,7 @@ use HP_Abilities\Abilities\CustomerLookup;
 use HP_Abilities\Abilities\OrderSearch;
 use HP_Abilities\Abilities\OrderStatus;
 use HP_Abilities\Abilities\Test;
+use HP_Abilities\Adapters\WPSEAdapter;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -227,6 +228,10 @@ class Plugin
         require_once $dir . 'Test.php';
         require_once $dir . 'FunnelApi.php';
         require_once $dir . 'ProductManager.php';
+
+        // Load Adapters
+        $adapters_dir = HP_ABILITIES_PATH . 'includes/Adapters/';
+        require_once $adapters_dir . 'WPSEAdapter.php';
 
         // Load Utils
         $utils_dir = HP_ABILITIES_PATH . 'includes/Utils/';
@@ -592,6 +597,93 @@ class Plugin
                     'set_private'   => ['type' => 'boolean', 'description' => 'Set old product to private status', 'default' => true],
                 ],
                 'required'   => ['old_sku', 'new_sku'],
+            ],
+            'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+
+        // =========================================================================
+        // WPSE-POWERED TOOLS (WP Sheet Editor Integration)
+        // These tools use WP Sheet Editor to access ALL product fields
+        // =========================================================================
+
+        wp_register_ability('hp-abilities/products-get-full', [
+            'label'               => 'Get Full Product Data',
+            'description'         => 'Get ALL product fields via WP Sheet Editor (core, ACF, SEO, taxonomy)',
+            'category'            => 'hp-admin',
+            'execute_callback'    => [ProductManager::class, 'getFullProduct'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'input_schema'        => [
+                'type'       => 'object',
+                'properties' => [
+                    'sku' => ['type' => 'string', 'description' => 'Product SKU'],
+                ],
+                'required'   => ['sku'],
+            ],
+            'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+
+        wp_register_ability('hp-abilities/products-compare', [
+            'label'               => 'Compare Products',
+            'description'         => 'Compare two products field-by-field, returns ALL differences including ACF',
+            'category'            => 'hp-admin',
+            'execute_callback'    => [ProductManager::class, 'compareProducts'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'input_schema'        => [
+                'type'       => 'object',
+                'properties' => [
+                    'source_sku' => ['type' => 'string', 'description' => 'Source product SKU (the reference)'],
+                    'target_sku' => ['type' => 'string', 'description' => 'Target product SKU (being compared)'],
+                ],
+                'required'   => ['source_sku', 'target_sku'],
+            ],
+            'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+
+        wp_register_ability('hp-abilities/products-clone', [
+            'label'               => 'Clone Product Fields',
+            'description'         => 'Copy ALL fields from source to target via WPSE with optional overrides',
+            'category'            => 'hp-admin',
+            'execute_callback'    => [ProductManager::class, 'cloneProduct'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'input_schema'        => [
+                'type'       => 'object',
+                'properties' => [
+                    'source_sku' => ['type' => 'string', 'description' => 'Source product SKU to copy from'],
+                    'target_sku' => ['type' => 'string', 'description' => 'Target product SKU to copy to'],
+                    'overrides'  => ['type' => 'object', 'description' => 'Fields to override (field_name: value)', 'additionalProperties' => true],
+                    'exclude'    => ['type' => 'array', 'description' => 'Field names to exclude from copying'],
+                ],
+                'required'   => ['source_sku', 'target_sku'],
+            ],
+            'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+
+        wp_register_ability('hp-abilities/products-update-fields', [
+            'label'               => 'Update Product Fields',
+            'description'         => 'Update ANY fields by human-readable name via WPSE (no field keys needed)',
+            'category'            => 'hp-admin',
+            'execute_callback'    => [ProductManager::class, 'updateFields'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'input_schema'        => [
+                'type'       => 'object',
+                'properties' => [
+                    'sku'    => ['type' => 'string', 'description' => 'Product SKU'],
+                    'fields' => ['type' => 'object', 'description' => 'Fields to update (field_name: value)', 'additionalProperties' => true],
+                ],
+                'required'   => ['sku', 'fields'],
+            ],
+            'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+
+        wp_register_ability('hp-abilities/products-available-fields', [
+            'label'               => 'List Available Fields',
+            'description'         => 'Get list of all available product fields from WPSE registry',
+            'category'            => 'hp-admin',
+            'execute_callback'    => [ProductManager::class, 'getAvailableFields'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'input_schema'        => [
+                'type'       => 'object',
+                'properties' => (object)[],
             ],
             'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
         ]);
@@ -1439,17 +1531,29 @@ This protocol ensures all AI agents maintain the HP Abilities ecosystem correctl
 - **Bridge Location**: Distributed in `bin/hp-mcp-bridge.js`. Copy to `C:\DEV\hp-mcp-bridge.js` for local Cursor.
 
 ## 3. Available Product Tools
+
+### Native Tools (Specialized Logic)
 | Tool | Purpose |
 |------|---------|
 | `products-search` | Search products by term |
-| `products-get` | Get product details by SKU |
-| `products-create` | Create new simple product with full fields + ACF |
-| `products-update-comprehensive` | Update product (core, ACF, SEO) |
-| `products-retire-redirect` | Retire product with 301 redirect to replacement |
+| `products-get` | Get product details by SKU (basic) |
+| `products-create` | Create new simple product |
+| `products-retire-redirect` | Retire product with 301 redirect |
 | `products-seo-audit` | SEO audit |
 | `products-gmc-audit` | GMC compliance audit |
 | `inventory-check` | Check stock levels |
 | `products-calculate-supply` | Calculate supply duration |
+
+### WPSE-Powered Tools (ALL Fields via WP Sheet Editor)
+| Tool | Purpose |
+|------|---------|
+| `products-get-full` | Get ALL product fields (core, ACF, SEO, taxonomy) |
+| `products-compare` | Compare two products, see ALL differences |
+| `products-clone` | Copy ALL fields from source to target |
+| `products-update-fields` | Update ANY field by name (no field keys needed) |
+| `products-available-fields` | List all available fields from WPSE registry |
+
+**Use WPSE tools for product replacement workflows** - they ensure no fields are missed.
 
 ## 4. Implementation Standards
 - **Callbacks**: Use static methods in Ability classes (e.g., `ProductManager::createProduct`).
