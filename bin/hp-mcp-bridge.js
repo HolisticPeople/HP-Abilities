@@ -1,28 +1,22 @@
-const fs = require('fs');
+/**
+ * HP MCP Bridge - WordPress Abilities to Cursor
+ * 
+ * This bridge handles communication between Cursor's MCP client and WordPress.
+ * It filters responses to only include HP abilities tools (excluding WooCommerce 
+ * native tools which have oversized schemas that Cursor can't handle).
+ * 
+ * Usage: node hp-mcp-bridge.js <API_URL> <API_KEY>
+ */
+
 const https = require('https');
-const path = require('path');
 
 const API_URL = process.argv[2];
 const API_KEY = process.argv[3];
-const LOG_FILE = path.join(__dirname, 'bridge.log');
-
-function log(message, data = {}) {
-  const payload = {
-    timestamp: new Date().toISOString(),
-    message,
-    data
-  };
-  try {
-    fs.appendFileSync(LOG_FILE, JSON.stringify(payload) + '\n');
-  } catch (e) {}
-}
 
 if (!API_URL || !API_KEY) {
   console.error('Usage: node hp-mcp-bridge.js <API_URL> <API_KEY>');
   process.exit(1);
 }
-
-log('Bridge starting...', { API_URL });
 
 let mcpSessionId = null;
 let requestQueue = [];
@@ -58,28 +52,6 @@ function callWP(method, params, id) {
 
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/fdc1e251-7d8c-4076-b3bd-ed8c4301842f', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            location: 'hp-mcp-bridge.js:end',
-            message: 'Received response from WP',
-            data: {
-              method: method,
-              url: API_URL,
-              statusCode: res.statusCode,
-              responseLength: data.length,
-              mcpSessionId: mcpSessionId,
-              responsePreview: data.substring(0, 500)
-            },
-            timestamp: Date.now(),
-            sessionId: 'debug-session',
-            hypothesisId: 'H2,H5'
-          })
-        }).catch(() => {});
-        // #endregion
-
         if (isNotification) return resolve(null);
 
         if (data.length === 0) {
@@ -94,9 +66,17 @@ function callWP(method, params, id) {
           // Strip BOM and any leading garbage
           const cleanData = data.replace(/^[^{]*/, '').trim();
           const parsed = JSON.parse(cleanData);
+          
+          // Filter to only include HP abilities tools
+          // WooCommerce native tools have oversized schemas (10KB+) that Cursor can't handle
+          if (parsed.result && parsed.result.tools && Array.isArray(parsed.result.tools)) {
+            parsed.result.tools = parsed.result.tools.filter(tool => {
+              return tool.name && tool.name.startsWith('hp-abilities');
+            });
+          }
+          
           resolve(parsed);
         } catch (e) {
-          log('JSON parse error', { error: e.message, dataPreview: data.substring(0, 100) });
           resolve({
             jsonrpc: '2.0',
             id: id,
@@ -107,33 +87,12 @@ function callWP(method, params, id) {
     });
 
     req.on('error', (e) => {
-      log('WP request error', { error: e.message });
       if (isNotification) resolve(null);
       else resolve({ jsonrpc: '2.0', id: id, error: { code: -32603, message: 'Bridge Request Error', data: e.message } });
     });
 
     const payload = { jsonrpc: '2.0', method: method, params: params };
     if (!isNotification) payload.id = id;
-
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/fdc1e251-7d8c-4076-b3bd-ed8c4301842f', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        location: 'hp-mcp-bridge.js:send',
-        message: 'Sending request to WP',
-        data: {
-          method: method,
-          url: API_URL,
-          params: params,
-          id: id
-        },
-        timestamp: Date.now(),
-        sessionId: 'debug-session',
-        hypothesisId: 'H2'
-      })
-    }).catch(() => {});
-    // #endregion
 
     req.write(JSON.stringify(payload));
     req.end();
@@ -148,10 +107,14 @@ async function processQueue() {
     const request = JSON.parse(line);
     const response = await callWP(request.method, request.params, request.id);
     if (response !== null) {
-      process.stdout.write(JSON.stringify(response) + '\n');
+      const jsonStr = JSON.stringify(response);
+      const canContinue = process.stdout.write(jsonStr + '\n');
+      if (!canContinue) {
+        await new Promise(resolve => process.stdout.once('drain', resolve));
+      }
     }
   } catch (e) {
-    log('Process error', { error: e.message });
+    // Silent fail - don't pollute stdout
   } finally {
     isProcessing = false;
     setImmediate(processQueue);
@@ -173,7 +136,8 @@ process.stdin.on('data', (chunk) => {
   }
 });
 
-process.on('uncaughtException', (e) => {
-  log('Uncaught Exception', { error: e.message });
-});
+process.on('uncaughtException', () => {});
 
+// Keep process alive
+process.stdin.resume();
+setInterval(() => {}, 30000);

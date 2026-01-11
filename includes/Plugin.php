@@ -399,6 +399,22 @@ class Plugin
         ]);
     }
 
+    /**
+     * =========================================================================
+     * DEPENDENCY SYNC CHECKLIST
+     * =========================================================================
+     * When modifying HP Abilities tools, keep these files in sync:
+     * 
+     * | Change              | Files to Update                                    |
+     * |---------------------|---------------------------------------------------|
+     * | Add/remove ability  | Plugin.php (register), Ability class (callback)   |
+     * | Change behavior     | .cursor/rules/mcp-protocol.mdc,                   |
+     * |                     | Plugin.php get_protocol_rule_text()               |
+     * | Bridge changes      | bin/hp-mcp-bridge.js, C:\DEV\hp-mcp-bridge.js     |
+     * | Version bump        | hp-abilities.php header + constant                |
+     * =========================================================================
+     */
+
     private static function register_product_abilities(): void
     {
         wp_register_ability('hp-abilities/products-update-comprehensive', [
@@ -500,6 +516,34 @@ class Plugin
                     'sku' => ['type' => 'string', 'description' => 'Product SKU'],
                 ],
                 'required'   => ['sku'],
+            ],
+            'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+
+        wp_register_ability('hp-abilities/products-create', [
+            'label'               => 'Create Product',
+            'description'         => 'Create a new simple WooCommerce product with full field support',
+            'category'            => 'hp-admin',
+            'execute_callback'    => [ProductManager::class, 'createProduct'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'input_schema'        => [
+                'type'       => 'object',
+                'properties' => [
+                    'name'              => ['type' => 'string', 'description' => 'Product name'],
+                    'sku'               => ['type' => 'string', 'description' => 'Unique SKU'],
+                    'price'             => ['type' => 'string', 'description' => 'Regular price'],
+                    'description'       => ['type' => 'string', 'description' => 'Full description'],
+                    'short_description' => ['type' => 'string', 'description' => 'Short description'],
+                    'stock_quantity'    => ['type' => 'integer', 'description' => 'Stock quantity'],
+                    'categories'        => ['type' => 'array', 'description' => 'Category slugs array'],
+                    'tags'              => ['type' => 'array', 'description' => 'Tag names array'],
+                    'weight'            => ['type' => 'string', 'description' => 'Weight (kg)'],
+                    'dimensions'        => ['type' => 'object', 'description' => '{length, width, height}'],
+                    'images'            => ['type' => 'array', 'description' => 'Image URLs to sideload'],
+                    'acf'               => ['type' => 'object', 'description' => 'ACF field key-value pairs'],
+                    'seo'               => ['type' => 'object', 'description' => '{title, description} for Yoast'],
+                ],
+                'required'   => ['name', 'sku', 'price'],
             ],
             'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
         ]);
@@ -1348,7 +1392,7 @@ class Plugin
 # MCP & Abilities Master Protocol
 
 ## Overview
-This protocol ensures all AI agents maintain the "Self-Healing" HP Abilities ecosystem correctly.
+This protocol ensures all AI agents maintain the HP Abilities ecosystem correctly. The bridge filters responses to only include `hp-abilities/*` tools due to Cursor's payload size limitations with WooCommerce native tools.
 
 ## 1. Tool Stewardship (Development)
 - **Namespace**: All custom tools MUST use the `hp-abilities/` prefix.
@@ -1359,20 +1403,41 @@ This protocol ensures all AI agents maintain the "Self-Healing" HP Abilities eco
   - `hp-seo`: SEO audits, JSON-LD schema.
   - `hp-economics`: Profitability calculations, pricing rules.
 
-## 2. Implementation Standards
-- **Callbacks**: Use static methods in existing Ability classes (e.g., `FunnelApi::execute`).
+## 2. Bridge Architecture
+- **HP-Only Filtering**: The `hp-mcp-bridge.js` only exposes `hp-abilities/*` tools. WooCommerce native tools (with 10KB+ schemas) are excluded to prevent Cursor parsing failures.
+- **Schema Size Limit**: Keep `inputSchema` under 1KB per tool. Use flexible object types instead of exhaustive property definitions.
+- **Bridge Location**: Distributed in `bin/hp-mcp-bridge.js`. Copy to `C:\DEV\hp-mcp-bridge.js` for local Cursor.
+
+## 3. Available Product Tools
+| Tool | Purpose |
+|------|---------|
+| `products-search` | Search products by term |
+| `products-get` | Get product details by SKU |
+| `products-create` | Create new simple product with full fields |
+| `products-update-comprehensive` | Update product (core, ACF, SEO) |
+| `products-seo-audit` | SEO audit |
+| `products-gmc-audit` | GMC compliance audit |
+| `inventory-check` | Check stock levels |
+| `products-calculate-supply` | Calculate supply duration |
+
+## 4. Implementation Standards
+- **Callbacks**: Use static methods in Ability classes (e.g., `ProductManager::createProduct`).
 - **Input Validation**: Use standard JSON schema for `input_schema`. Ensure empty parameters are `(object)[]`.
 - **Dependencies**: Check if `HP_RW` service classes exist before execution.
 
-## 3. Deployment & Verification
-- **Auto-Discovery**: Do NOT manually update the settings page table; the plugin discovers tools dynamically.
-- **Health Check**: After adding a tool, you MUST click the "Check Health" button on the Settings page to verify connectivity.
-- **Kill-Switch**: Use the "Status" toggle to instantly mute tools if security or performance issues arise.
+## 5. Deployment & Verification
+- **Auto-Discovery**: Tools are discovered dynamically on the Settings page.
+- **Health Check**: After adding a tool, use "Check Health" to verify callback validity.
+- **Kill-Switch**: Use "Status" toggle to mute tools instantly.
 
-## 4. MCP Server Sync
-- Use the generated snippets in `mcp.json`. The bridge file is distributed with this plugin in the `bin/` folder.
-- If Cursor is on a remote machine, copy the bridge code from the "Bridge Source" card to your local `C:\DEV\hp-mcp-bridge.js`.
-- Custom bridge handles authentication headers and BOM issues.
+## 6. Dependency Sync Checklist
+When modifying HP Abilities tools, keep these files in sync:
+| Change | Files to Update |
+|--------|-----------------|
+| Add/remove ability | `Plugin.php` (register), Ability class (callback) |
+| Change behavior | Cursor rule `.mdc`, Settings page `get_protocol_rule_text()` |
+| Bridge changes | `bin/hp-mcp-bridge.js`, `C:\DEV\hp-mcp-bridge.js` |
+| Version bump | `hp-abilities.php` header + constant |
 EOD;
     }
 }
