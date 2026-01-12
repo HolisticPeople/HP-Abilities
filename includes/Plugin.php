@@ -248,86 +248,57 @@ class Plugin
     public static function get_default_correction_prompt(): string
     {
         return <<<'PROMPT'
-MASK CORRECTION WORKFLOW FOR PRODUCT IMAGES
+MASK CORRECTION WORKFLOW: THE POWER OF SYMMETRY
 
 ALWAYS VIEW ON BLACK BACKGROUND - this reveals edge issues that white/transparent hides.
 MAXIMUM 3-4 ITERATIONS - if not fixed after 4 passes, accept or flag for manual review.
 
-== STEP 0: UNDERSTAND THE BIG PICTURE ==
+== STEP 0: SYMMETRY SANITY CHECK ==
 
-BEFORE any analysis, look at the ORIGINAL image and understand:
-1. What is the overall product SHAPE? (Bottles are cylindrical)
-2. Where are the TRUE EDGES? (Where product meets background)
-3. What elements are PART OF the product vs the edge?
-   - Vertical text on a label = PART of the label, NOT the edge
-   - Decorative elements = PART of the product
-   - The actual edge is where the PRODUCT (dark body OR white label) meets BACKGROUND
+Bottles are GEOMETRICALLY PREDICTABLE. They consist of smooth, continuous curves 
+and are almost always SYMMETRICAL. 
 
-COMMON MISTAKE: Confusing label text or graphics with the product edge.
-The bottle's left edge is where the bottle itself ends, not where text starts.
+1. Look at the RIGHT edge vs the LEFT edge. 
+2. If one side is clean (high contrast) but the other is jagged, use SYMMETRY.
+3. The "good" side is your template for the "bad" side.
 
-== BOTTLE ANATOMY ==
+== STEP 1: FIND THE CENTER ==
 
-Typical supplement bottle from top to bottom:
-- CAP: Dark, rounded top
-- SHOULDER: Dark body, curves outward then narrows
-- LABEL AREA: White/colored label wrapped on dark body
-  - Dark body may be visible on left/right of label
-  - Or label may extend to the edges
-- BASE: Dark body, slightly wider
+Identify the horizontal center of the bottle in the original image.
+- Center X = (Leftmost product point + Rightmost product point) / 2
+- Usually around X=390-400 for standard shots.
 
-== STEP 1: ANALYZE BY REGION ==
+== STEP 2: FULL-PATH MIRRORING (Pass 1) ==
 
-Use: node bin/apply-bottle-shape.js <mask> <original>
+Use: node bin/mirror-edge.js --mask <mask-path> --original <original-path> --center <X> --source-side <good-side>
 
-This tool:
-1. Detects bottle shape by region (cap, shoulder, label, base)
-2. Finds the MEDIAN edge position for each region (not per-row)
-3. Applies a CLEAN, CONSISTENT edge
-4. Hardens semi-transparent pixels
+This is the MOST EFFECTIVE way to fix broken edges. It mirrors the ENTIRE path 
+of the good side to the bad side, ensuring a perfectly natural, symmetrical shape.
 
-== STEP 2: VIEW ON BLACK ==
+== STEP 3: REFINEMENT (Pass 2) ==
 
-Use: node bin/view-on-black.js <image>
+View on BLACK background: node bin/view-on-black.js <mask-path>
 
-Creates a black background version for quality inspection.
-Check for:
-- Irregular/jagged edges
-- Semi-transparent "glow" at edges
-- Missing product areas
-- Included background areas
+If the mirrored edge cuts off important product details (like label text very 
+close to the edge):
+1. Use edit-mask.js for targeted minor adjustments.
+2. CRITICAL: Always provide the --original path to sample TRUE product colors.
 
-== STEP 3: ITERATIVE REFINEMENT ==
+== ANALYSIS TOOLS ==
 
-If apply-bottle-shape didn't fully fix it:
+- node bin/mirror-edge.js      → Mirrors entire edge path based on symmetry
+- node bin/apply-bottle-shape.js → Enforces region-based geometric frame
+- node bin/view-on-black.js    → Reveals edge issues hidden by white/transparency
+- node bin/edit-mask.js        → Targeted manual pixel corrections
 
-1. Identify specific problem regions
-2. Use edit-mask.js for targeted fixes:
-   node bin/edit-mask.js --mask <path> --original <path> --left-edge X --from-row Y --to-row Z --blend-zone 10
+== WORKFLOW SUMMARY ==
 
-3. Re-view on black
-4. Repeat until clean (max 3-4 iterations)
+Iteration 1: Find Center + node bin/mirror-edge.js (The Symmetry Pass)
+Iteration 2: node bin/view-on-black.js + node bin/edit-mask.js (The Detail Pass)
+Iteration 3: Final verification on Black.
 
-== KEY DETECTION THRESHOLDS ==
-
-Background: Usually light gray (lum ~210)
-Dark body: lum < 130 (very dark)
-White label: lum > 225 (very light)
-
-The AI struggles when:
-- White label (lum 230) vs Gray background (lum 210) = only 20 points difference
-- Creates soft/semi-transparent edges instead of crisp cuts
-
-Solution: Use apply-bottle-shape.js to enforce hard edges based on overall shape.
-
-== VERIFICATION CHECKLIST ==
-
-✓ Viewed on BLACK background
-✓ No jagged/irregular edges
-✓ No semi-transparent "glow" or fringing
-✓ Product shape is natural (smooth curves, straight body sides)
-✓ All product elements are included (text, graphics, labels)
-✓ No background bleeding through
+If mirroring doesn't work (e.g. non-symmetrical product), use apply-bottle-shape.js 
+to enforce clean geometric lines.
 PROMPT;
     }
 
