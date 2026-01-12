@@ -1,11 +1,30 @@
 /**
- * Harden mask edges by eliminating semi-transparency
- * Makes edge pixels either fully opaque (255) or fully transparent (0)
+ * Harden Edge Tool for HP Abilities
  * 
- * Usage: node bin/harden-edge.js <mask> <original> [--threshold 180]
+ * Converts semi-transparent edge pixels to hard edges (fully opaque or transparent).
+ * This eliminates the "glow" or "fringe" that AI background removal often leaves.
  * 
- * The threshold determines where to cut: pixels in original with luminosity
- * significantly different from background get alpha=255, others get alpha=0
+ * How it works:
+ *   1. Detects background luminosity from image corners
+ *   2. For each row, finds where the product actually starts in the original
+ *   3. Makes pixels at/after product start fully opaque (alpha=255)
+ *   4. Makes pixels before product start fully transparent (alpha=0)
+ *   5. Uses original image colors for opaque pixels
+ * 
+ * Usage:
+ *   node bin/harden-edge.js <mask-path> <original-path> [--threshold=15]
+ * 
+ * Parameters:
+ *   mask-path     Path to the mask image (will be modified in place)
+ *   original-path Path to the original source image
+ *   --threshold   Luminosity difference from background to detect product (default: 15)
+ * 
+ * Example:
+ *   node bin/harden-edge.js temp/DH515-front-mask.png temp/DH515-front-input.png
+ *   node bin/harden-edge.js temp/mask.png temp/input.png --threshold=20
+ * 
+ * Note: This tool works best AFTER mirror-edge.js or edit-mask.js have been applied.
+ * It's a finishing step to eliminate any remaining semi-transparent pixels.
  */
 const sharp = require('sharp');
 const fs = require('fs');

@@ -248,57 +248,80 @@ class Plugin
     public static function get_default_correction_prompt(): string
     {
         return <<<'PROMPT'
-MASK CORRECTION WORKFLOW: THE POWER OF SYMMETRY
+MASK CORRECTION WORKFLOW: ADAPTIVE SYMMETRY
 
 ALWAYS VIEW ON BLACK BACKGROUND - this reveals edge issues that white/transparent hides.
 MAXIMUM 3-4 ITERATIONS - if not fixed after 4 passes, accept or flag for manual review.
 
-== STEP 0: SYMMETRY SANITY CHECK ==
+== CORE PRINCIPLE: ADAPTIVE SYMMETRY ==
 
-Bottles are GEOMETRICALLY PREDICTABLE. They consist of smooth, continuous curves 
-and are almost always SYMMETRICAL. 
+Bottles are SYMMETRICAL. When the AI creates a broken edge, mirror from the GOOD 
+side to the BAD side. But EITHER side can be broken, and DIFFERENT REGIONS may 
+need different mirror directions.
 
-1. Look at the RIGHT edge vs the LEFT edge. 
-2. If one side is clean (high contrast) but the other is jagged, use SYMMETRY.
-3. The "good" side is your template for the "bad" side.
+Example scenarios:
+- Entire left edge jagged → mirror right to left (full height)
+- Top-left broken but bottom-left fine → mirror right to left for TOP only
+- Left shoulder broken, right base broken → mirror right→left for shoulder, left→right for base
 
-== STEP 1: FIND THE CENTER ==
+== STEP 1: ANALYZE BOTH EDGES ==
+
+Look at the mask on a BLACK background. For each vertical region (cap, shoulder, 
+label, base), determine:
+- Is the LEFT edge smooth or jagged?
+- Is the RIGHT edge smooth or jagged?
+- Which side is "cleaner" for this region?
+
+== STEP 2: FIND THE CENTER ==
 
 Identify the horizontal center of the bottle in the original image.
 - Center X = (Leftmost product point + Rightmost product point) / 2
-- Usually around X=390-400 for standard shots.
+- Sample at multiple rows to find the true center.
 
-== STEP 2: FULL-PATH MIRRORING (Pass 1) ==
+== STEP 3: REGIONAL MIRRORING ==
 
-Use: node bin/mirror-edge.js --mask <mask-path> --original <original-path> --center <X> --source-side <good-side>
+Mirror each broken region from the good side:
 
-This is the MOST EFFECTIVE way to fix broken edges. It mirrors the ENTIRE path 
-of the good side to the bad side, ensuring a perfectly natural, symmetrical shape.
+Full height (if one side is entirely broken):
+  node bin/mirror-edge.js --mask MASK --original ORIG --center X --source-side right
 
-== STEP 3: REFINEMENT (Pass 2) ==
+Specific region only:
+  node bin/mirror-edge.js --mask MASK --original ORIG --center X --source-side right --from-row 200 --to-row 500
 
-View on BLACK background: node bin/view-on-black.js <mask-path>
+Different regions with different sources:
+  # Top section: mirror from right
+  node bin/mirror-edge.js --mask MASK --original ORIG --center X --source-side right --from-row 0 --to-row 300
+  # Bottom section: mirror from left
+  node bin/mirror-edge.js --mask MASK --original ORIG --center X --source-side left --from-row 600 --to-row 800
 
-If the mirrored edge cuts off important product details (like label text very 
-close to the edge):
-1. Use edit-mask.js for targeted minor adjustments.
-2. CRITICAL: Always provide the --original path to sample TRUE product colors.
+== STEP 4: VERIFY ON BLACK ==
 
-== ANALYSIS TOOLS ==
+node bin/view-on-black.js <mask-path>
 
-- node bin/mirror-edge.js      → Mirrors entire edge path based on symmetry
-- node bin/apply-bottle-shape.js → Enforces region-based geometric frame
+Check for:
+- Smooth, continuous edges on both sides
+- No jagged "bites" or irregular dips
+- Natural bottle shape with symmetrical curves
+
+== STEP 5: FINALIZE ==
+
+node bin/image-prep.js --sku SKU --angle front --use-mask MASK --upload
+
+== AVAILABLE TOOLS ==
+
+- node bin/mirror-edge.js      → Mirrors edge path based on symmetry (supports --from-row/--to-row)
 - node bin/view-on-black.js    → Reveals edge issues hidden by white/transparency
-- node bin/edit-mask.js        → Targeted manual pixel corrections
+- node bin/edit-mask.js        → Targeted manual pixel corrections (use --original for true colors)
+- node bin/apply-bottle-shape.js → Enforces region-based geometric frame (fallback)
 
 == WORKFLOW SUMMARY ==
 
-Iteration 1: Find Center + node bin/mirror-edge.js (The Symmetry Pass)
-Iteration 2: node bin/view-on-black.js + node bin/edit-mask.js (The Detail Pass)
-Iteration 3: Final verification on Black.
-
-If mirroring doesn't work (e.g. non-symmetrical product), use apply-bottle-shape.js 
-to enforce clean geometric lines.
+1. Generate mask:       node bin/image-prep.js --url URL --sku SKU --angle front --mask-only
+2. View on black:       node bin/view-on-black.js MASK
+3. Analyze both edges:  Identify which regions are broken on which side
+4. Mirror per-region:   node bin/mirror-edge.js with appropriate --source-side and row range
+5. Verify on black:     node bin/view-on-black.js MASK
+6. Finalize & upload:   node bin/image-prep.js --sku SKU --angle front --use-mask MASK --upload
 PROMPT;
     }
 

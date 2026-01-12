@@ -1,5 +1,24 @@
 /**
- * Analyze mask edges for remaining issues
+ * Analyze Mask Tool for HP Abilities
+ * 
+ * Analyzes a mask image to identify edge quality issues.
+ * Reports statistics about left/right edges and identifies problem areas.
+ * 
+ * Usage:
+ *   node bin/analyze-mask.js <mask-path>
+ * 
+ * Example:
+ *   node bin/analyze-mask.js temp/DH515-front-mask.png
+ * 
+ * Output:
+ *   - Dimensions and content row count
+ *   - Left edge analysis for body region (rows 200-600)
+ *   - Expected edge position (minimum X)
+ *   - Number of rows with issues (>2px deviation)
+ *   - Problem range if issues exist
+ * 
+ * Use this tool after generating a mask to identify which regions
+ * need correction before applying mirror-edge.js or edit-mask.js.
  */
 const sharp = require('sharp');
 

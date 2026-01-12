@@ -1,8 +1,26 @@
 /**
- * View an image on black background for quality inspection
- * Creates a composite with black background and opens in browser
+ * View on Black Background Tool for HP Abilities
  * 
- * Usage: node bin/view-on-black.js temp/DH515-front-mask.png
+ * Composites an image onto a black background for quality inspection.
+ * This is CRITICAL for mask correction - white/transparent backgrounds
+ * hide edge issues that are clearly visible on black.
+ * 
+ * Usage:
+ *   node bin/view-on-black.js <image-path>
+ * 
+ * Example:
+ *   node bin/view-on-black.js temp/DH515-front-mask.png
+ *   # Creates: temp/DH515-front-mask-on-black.png
+ * 
+ * Output:
+ *   Creates a new file with '-on-black.png' suffix in the same directory.
+ *   Prints the output path and dimensions to stdout.
+ * 
+ * Why Black Background:
+ *   - Reveals semi-transparent edge pixels (appear as faint glow)
+ *   - Shows jagged/irregular edges clearly
+ *   - Matches the display context for many product pages
+ *   - Essential for the Adaptive Symmetry Workflow
  */
 const sharp = require('sharp');
 const fs = require('fs');

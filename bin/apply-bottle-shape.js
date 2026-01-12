@@ -1,8 +1,34 @@
 /**
- * Apply a clean bottle shape edge to the mask
- * Uses detected bottle shape from original, applies as hard edge
+ * Apply Bottle Shape Tool for HP Abilities
  * 
- * Usage: node bin/apply-bottle-shape.js <mask> <original>
+ * Enforces a clean, geometrically correct bottle shape on a mask.
+ * This is a FALLBACK tool for non-symmetrical products or when
+ * mirror-edge.js doesn't work well.
+ * 
+ * How it works:
+ *   1. Divides the bottle into regions (cap, shoulder, label, base)
+ *   2. For each region, detects the median left edge position
+ *   3. Applies a smooth, consistent edge based on detected shape
+ *   4. Hardens semi-transparent pixels to full opacity
+ * 
+ * Usage:
+ *   node bin/apply-bottle-shape.js <mask-path> <original-path>
+ * 
+ * Example:
+ *   node bin/apply-bottle-shape.js temp/DH515-front-mask.png temp/DH515-front-input.png
+ * 
+ * Region Detection:
+ *   - Cap (rows 100-180): Dark pixels only
+ *   - Shoulder (rows 180-280): Dark or white pixels
+ *   - Label (rows 280-600): White/light pixels (the label area)
+ *   - Base (rows 600-700): Dark pixels only
+ * 
+ * Note: This tool only corrects the LEFT edge. For right edge issues,
+ * use mirror-edge.js with --source-side left.
+ * 
+ * When to use this vs mirror-edge.js:
+ *   - mirror-edge.js: When one side is clearly better than the other (preferred)
+ *   - apply-bottle-shape.js: When both sides need correction or for non-symmetrical shapes
  */
 const sharp = require('sharp');
 
