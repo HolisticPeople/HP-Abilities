@@ -251,94 +251,83 @@ class Plugin
 MASK CORRECTION WORKFLOW FOR PRODUCT IMAGES
 
 ALWAYS VIEW ON BLACK BACKGROUND - this reveals edge issues that white/transparent hides.
-Use: node bin/view-on-black.js <mask-path>
-
 MAXIMUM 3-4 ITERATIONS - if not fixed after 4 passes, accept or flag for manual review.
 
-== ITERATION WORKFLOW ==
+== STEP 0: UNDERSTAND THE BIG PICTURE ==
 
-For each iteration:
-1. Generate/view mask on BLACK background
-2. Run analysis: node bin/check-issues.js <mask> <original>
-3. Apply targeted corrections
-4. View result on BLACK background
-5. If issues remain (>3px deep cuts), continue to next iteration
+BEFORE any analysis, look at the ORIGINAL image and understand:
+1. What is the overall product SHAPE? (Bottles are cylindrical)
+2. Where are the TRUE EDGES? (Where product meets background)
+3. What elements are PART OF the product vs the edge?
+   - Vertical text on a label = PART of the label, NOT the edge
+   - Decorative elements = PART of the product
+   - The actual edge is where the PRODUCT (dark body OR white label) meets BACKGROUND
 
-== ANALYSIS TOOLS ==
+COMMON MISTAKE: Confusing label text or graphics with the product edge.
+The bottle's left edge is where the bottle itself ends, not where text starts.
 
-- node bin/view-on-black.js <image>    → Creates -on-black.png version
-- node bin/check-issues.js <mask> <orig> → Lists rows with >3px deep cuts
-- node bin/analyze-mask.js <mask>      → General edge analysis
+== BOTTLE ANATOMY ==
 
-== FINDING PROBLEMS ==
+Typical supplement bottle from top to bottom:
+- CAP: Dark, rounded top
+- SHOULDER: Dark body, curves outward then narrows
+- LABEL AREA: White/colored label wrapped on dark body
+  - Dark body may be visible on left/right of label
+  - Or label may extend to the edges
+- BASE: Dark body, slightly wider
 
-The AI struggles with TRANSITION ZONES:
-- Light label meeting dark bottle body (both against light background)
-- Dark cap meeting dark body
-- White/light edges on white/light background
+== STEP 1: ANALYZE BY REGION ==
 
-Use check-issues.js to find:
-- DEEP CUT rows (mask is >3px inside actual product edge)
-- Problem ranges (consecutive rows needing same fix)
+Use: node bin/apply-bottle-shape.js <mask> <original>
 
-== APPLYING CORRECTIONS ==
+This tool:
+1. Detects bottle shape by region (cap, shoulder, label, base)
+2. Finds the MEDIAN edge position for each region (not per-row)
+3. Applies a CLEAN, CONSISTENT edge
+4. Hardens semi-transparent pixels
 
-node bin/edit-mask.js parameters:
-  --mask <path>           The mask to edit
-  --original <path>       Original image (for color sampling)
-  --left-edge X           Set left edge to X
-  --right-edge X          Set right edge to X  
-  --from-row Y            Start row
-  --to-row Z              End row
-  --blend-zone N          Extra pixels to overwrite (default 5, use 8-10 for stubborn edges)
+== STEP 2: VIEW ON BLACK ==
 
-Example: node bin/edit-mask.js --mask temp/SKU-mask.png --original temp/SKU-input.png --left-edge 244 --from-row 300 --to-row 550 --blend-zone 10
+Use: node bin/view-on-black.js <image>
 
-THE TOOL WILL SKIP BACKGROUND PIXELS:
-- It detects background color from corners
-- Won't fill pixels that match background
-- This is CORRECT - can't recover what isn't there
+Creates a black background version for quality inspection.
+Check for:
+- Irregular/jagged edges
+- Semi-transparent "glow" at edges
+- Missing product areas
+- Included background areas
 
-== CORRECTION STRATEGY ==
+== STEP 3: ITERATIVE REFINEMENT ==
 
-ITERATION 1: Broad strokes
-- Fix the largest problem area (usually the label)
-- Use generous row range and blend-zone
+If apply-bottle-shape didn't fully fix it:
 
-ITERATION 2: Targeted fixes  
-- Check remaining issues
-- Fix specific problem ranges
+1. Identify specific problem regions
+2. Use edit-mask.js for targeted fixes:
+   node bin/edit-mask.js --mask <path> --original <path> --left-edge X --from-row Y --to-row Z --blend-zone 10
 
-ITERATION 3: Fine-tuning
-- Address scattered remaining spots
-- May need multiple small corrections
+3. Re-view on black
+4. Repeat until clean (max 3-4 iterations)
 
-ITERATION 4 (if needed): Final cleanup
-- Any remaining issues
+== KEY DETECTION THRESHOLDS ==
 
-== EDGE POSITIONS ==
+Background: Usually light gray (lum ~210)
+Dark body: lum < 130 (very dark)
+White label: lum > 225 (very light)
 
-For BOTTLES:
-- Label width < Body width (label is inset)
-- Shoulder curves outward as you go up from label
-- Body sides are nearly straight vertical lines
+The AI struggles when:
+- White label (lum 230) vs Gray background (lum 210) = only 20 points difference
+- Creates soft/semi-transparent edges instead of crisp cuts
 
-Find the correct edge position by:
-1. Looking at where AI did well (anchor points)
-2. Checking original image pixel colors
-3. Using consistent X position for straight sections
+Solution: Use apply-bottle-shape.js to enforce hard edges based on overall shape.
 
-== VERIFICATION ==
+== VERIFICATION CHECKLIST ==
 
-After each iteration:
-1. View on BLACK background
-2. Run check-issues.js
-3. Goal: 0 remaining deep cut issues
-
-Final image should:
-- Have clean, smooth edges
-- Follow natural product shape
-- No visible jagged/irregular edges on black background
+✓ Viewed on BLACK background
+✓ No jagged/irregular edges
+✓ No semi-transparent "glow" or fringing
+✓ Product shape is natural (smooth curves, straight body sides)
+✓ All product elements are included (text, graphics, labels)
+✓ No background bleeding through
 PROMPT;
     }
 
