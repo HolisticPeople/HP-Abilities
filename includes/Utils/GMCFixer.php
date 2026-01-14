@@ -34,6 +34,21 @@ class GMCFixer
     }
 
     /**
+     * Normalize WooCommerce weight unit to GMC-compatible format.
+     * Google requires singular units: lb, oz, g, kg
+     */
+    public static function normalize_weight_unit(string $unit): string
+    {
+        $unit_map = [
+            'lbs' => 'lb',
+            'ozs' => 'oz',
+            'kgs' => 'kg',
+            'grams' => 'g',
+        ];
+        return $unit_map[strtolower($unit)] ?? $unit;
+    }
+
+    /**
      * Map WC product weight to the GMC shipping_weight attribute for the feed.
      */
     public static function map_shipping_weight($value, \WC_Product $product)
@@ -41,7 +56,10 @@ class GMCFixer
         if (!empty($value)) return $value;
         $weight = $product->get_weight();
         if (empty($weight)) return $value;
+        
         $unit = get_option('woocommerce_weight_unit', 'lb');
+        $unit = self::normalize_weight_unit($unit);
+        
         return $weight . ' ' . $unit;
     }
 
@@ -78,7 +96,7 @@ class GMCFixer
         $product = wc_get_product($product_id);
         if (!$product) return;
 
-        $unit = get_option('woocommerce_weight_unit', 'lb');
+        $unit = self::normalize_weight_unit(get_option('woocommerce_weight_unit', 'lb'));
         $weight = $product->get_weight();
         $brand_name = self::get_product_brand($product_id);
         
