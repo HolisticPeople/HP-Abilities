@@ -865,6 +865,100 @@ class FunnelApi
     }
 
     /**
+     * Suggest benefit categories for a funnel based on product type/topic.
+     * Round 2 improvement: AI agents can use this to organize benefits by category.
+     *
+     * @param mixed $input Array with 'topic' or 'product_type'.
+     * @return array Category suggestions.
+     */
+    public static function suggestBenefitCategories($input): array
+    {
+        $input = self::ensureArrayRecursive($input);
+        $topic = sanitize_text_field($input['topic'] ?? $input['product_type'] ?? 'general');
+        
+        // Default categories with their descriptions
+        $availableCategories = [
+            'health' => [
+                'key' => 'health',
+                'label' => 'Health & Wellness',
+                'description' => 'Benefits related to physical health, energy, vitality',
+                'suggested_icons' => ['heart', 'leaf', 'sun'],
+                'seo_keywords' => ['healthy', 'wellness', 'vitality', 'energy', 'natural'],
+            ],
+            'science' => [
+                'key' => 'science',
+                'label' => 'Science & Research',
+                'description' => 'Clinical studies, research-backed claims, scientific evidence',
+                'suggested_icons' => ['flask', 'brain', 'shield'],
+                'seo_keywords' => ['clinically proven', 'research', 'studies', 'evidence', 'scientific'],
+            ],
+            'quality' => [
+                'key' => 'quality',
+                'label' => 'Quality & Purity',
+                'description' => 'Manufacturing quality, purity standards, certifications',
+                'suggested_icons' => ['shield', 'star', 'check'],
+                'seo_keywords' => ['pure', 'certified', 'premium', 'quality', 'tested'],
+            ],
+            'results' => [
+                'key' => 'results',
+                'label' => 'Results & Benefits',
+                'description' => 'Expected outcomes, customer results, transformations',
+                'suggested_icons' => ['bolt', 'star', 'check'],
+                'seo_keywords' => ['results', 'transform', 'improve', 'effective', 'works'],
+            ],
+            'support' => [
+                'key' => 'support',
+                'label' => 'Support & Care',
+                'description' => 'Customer support, guarantees, shipping, returns',
+                'suggested_icons' => ['heart', 'shield', 'check'],
+                'seo_keywords' => ['support', 'guarantee', 'care', 'service', 'satisfaction'],
+            ],
+        ];
+        
+        // Topic-specific recommendations
+        $topicRecommendations = [
+            'supplement' => ['health', 'science', 'quality'],
+            'detox' => ['health', 'science', 'results'],
+            'cleanse' => ['health', 'results', 'quality'],
+            'beauty' => ['results', 'quality', 'science'],
+            'wellness' => ['health', 'results', 'support'],
+            'fitness' => ['results', 'science', 'quality'],
+            'general' => ['health', 'quality', 'results'],
+        ];
+        
+        $lowerTopic = strtolower($topic);
+        $recommendedKeys = $topicRecommendations['general'];
+        
+        foreach ($topicRecommendations as $key => $cats) {
+            if (strpos($lowerTopic, $key) !== false) {
+                $recommendedKeys = $cats;
+                break;
+            }
+        }
+        
+        $recommended = [];
+        $other = [];
+        
+        foreach ($availableCategories as $key => $category) {
+            if (in_array($key, $recommendedKeys)) {
+                $category['recommended'] = true;
+                $recommended[] = $category;
+            } else {
+                $category['recommended'] = false;
+                $other[] = $category;
+            }
+        }
+        
+        return [
+            'success' => true,
+            'topic' => $topic,
+            'recommended_categories' => $recommended,
+            'other_categories' => $other,
+            'usage_instructions' => 'Use the category key values (health, science, quality, results, support) when setting the "category" field on each benefit item. Enable categorized layout by setting benefits.enable_categories to true.',
+        ];
+    }
+
+    /**
      * Deeply convert objects to arrays.
      * 
      * @param mixed $value Value to convert

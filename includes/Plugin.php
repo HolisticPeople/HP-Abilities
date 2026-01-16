@@ -1126,6 +1126,22 @@ PROMPT;
             'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
         ]);
 
+        // Round 2: Suggest benefit categories for organizing benefits
+        wp_register_ability('hp-abilities/funnels-suggest-benefit-categories', [
+            'label'               => 'Suggest Benefit Categories',
+            'description'         => 'Get category suggestions for organizing funnel benefits by topic/product type',
+            'category'            => 'hp-funnels',
+            'execute_callback'    => [FunnelApi::class, 'suggestBenefitCategories'],
+            'permission_callback' => fn() => current_user_can('manage_woocommerce'),
+            'input_schema'        => [
+                'type'       => 'object',
+                'properties' => [
+                    'topic' => ['type' => 'string', 'description' => 'Product type or topic (e.g., supplement, detox, cleanse, beauty)'],
+                ],
+            ],
+            'meta'                => ['mcp' => ['public' => true, 'type' => 'tool']],
+        ]);
+
         wp_register_ability('hp-abilities/protocols-build-kit', [
             'label'               => 'Build Protocol Kit',
             'description'         => 'Build a product kit from a set of supplements',
